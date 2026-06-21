@@ -46,6 +46,11 @@ Investment risk indicator app targeting new/conservative investors. See `docs/fe
 
 Data source candidates listed in `docs/features.md` (Yahoo Finance, Alpha Vantage, Twelve Data, Polygon, Finnhub, FRED).
 
+## Database
+
+- **DB:** Postgres. Schema owned by Alembic migrations in `backend/` (hand-authored). Never use `alembic revision --autogenerate`.
+- **Backend ORM:** SQLAlchemy in `backend/`
+- **Package manager:** `uv` (not poetry)
 
 ## Self-Maintenance Rule
 After completing any feature, architectural shift, or major code correction, update this CLAUDE.md file to reflect the current state, updated test commands, or newly discovered pitfalls before closing the session.
