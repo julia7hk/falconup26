@@ -9,7 +9,6 @@
 - [ ] FastAPI in `backend/` — Python 3.13
 - [ ] Alembic init in `backend/` — database migration management
 - [ ] Next.js (App Router) in `web/` — TypeScript + Tailwind, mobile-first
-- [ ] Dev tooling (ruff, prettier, lefthook)
 - [ ] Docker + Compose in `ops/`
 - [ ] CI/CD pipeline
 - [ ] Domain wiring + TLS
