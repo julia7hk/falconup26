@@ -4,10 +4,10 @@
 
 ## Milestone 1: Project Foundation
 
-- [ ] `.env`, `.envrc`, `.env.example` — environment variable setup (direnv)
-- [ ] `uv` as Python package manager (`pyproject.toml`, lockfile)
+- [x] `.env`, `.envrc`, `.env.example` — environment variable setup (direnv)
+- [x] `uv` as Python package manager (`pyproject.toml`, lockfile)
 - [ ] FastAPI in `backend/` — Python 3.13
-- [ ] Alembic init in `backend/` — database migration management
+- [x] Alembic init in `backend/` — database migration management
 - [ ] Next.js (App Router) in `web/` — TypeScript + Tailwind, mobile-first
 - [ ] Docker + Compose in `ops/`
 - [ ] CI/CD pipeline
