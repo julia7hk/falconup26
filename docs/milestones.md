@@ -4,9 +4,11 @@
 
 ## Milestone 1: Project Foundation
 
+- [x] `.env`, `.envrc`, `.env.example` — environment variable setup (direnv)
+- [x] `uv` as Python package manager (`pyproject.toml`, lockfile)
+- [ ] FastAPI in `backend/` — Python 3.13
+- [x] Alembic init in `backend/` — database migration management
 - [ ] Next.js (App Router) in `web/` — TypeScript + Tailwind, mobile-first
-- [ ] FastAPI in `serv/` — Python 3.13
-- [ ] Dev tooling (ruff, prettier, direnv, lefthook)
 - [ ] Docker + Compose in `ops/`
 - [ ] CI/CD pipeline
 - [ ] Domain wiring + TLS
@@ -19,9 +21,8 @@
 - [ ] Rate limiting + caching layer
 - [ ] FRED integration for macro data (VIX, yield curves, fed funds rate)
 
-## Milestone 3: Database & Data Model
+## Milestone 3: Database Schema
 
-- [ ] Alembic init in `serv/`
 - [ ] Migration: `symbol` table (ticker, name, type: ETF/stock, sector)
 - [ ] Migration: `portfolio_holding` table (symbol, shares, avg_cost)
 - [ ] Migration: `price_history` table (symbol, date, OHLCV)
