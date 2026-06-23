@@ -6,11 +6,11 @@
 
 - [x] `.env`, `.envrc`, `.env.example` — environment variable setup (direnv)
 - [x] `uv` as Python package manager (`pyproject.toml`, lockfile)
-- [ ] FastAPI in `backend/` — Python 3.13
 - [x] Alembic init in `backend/` — database migration management
+- [x] FastAPI in `backend/` — Python 3.13
 - [ ] Next.js (App Router) in `web/` — TypeScript + Tailwind, mobile-first
 - [ ] Docker + Compose in `ops/`
-- [ ] CI/CD pipeline
+- [ ] Github Actions CI/CD pipeline
 - [ ] Domain wiring + TLS
 
 ## Milestone 2: Data Source Integration
