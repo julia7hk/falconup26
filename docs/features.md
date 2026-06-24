@@ -7,19 +7,39 @@ Status reflects what's shipped to prod. See
 
 ---
 
-## MVP (V0 — "ship something usable")
+## MVP (V0 — "portfolio intelligence platform")
 
 - [ ] Portfolio dashboard — enter holdings (symbol + shares + avg cost),
       see current value, total P&L, and per-position gain/loss
-- [ ] Risk indicator panel per symbol — consolidate key metrics in one
+- [ ] Per-symbol risk indicator panel — consolidate key metrics in one
       view: RSI, MACD, Bollinger Band width, 50/200-day SMA crossover,
       ATR (volatility), beta, Sharpe ratio
 - [ ] Buy / Hold / Sell signal with confidence score — weighted
       composite of the indicators above, displayed as a clear badge per
       symbol
-- [ ] Signal explainer — every recommendation shows *why*: which
-      indicators fired, their current values, what threshold triggered
-      the signal, and a plain-English sentence so you actually learn
+- [ ] Deterministic signal explainer — every recommendation shows *why*:
+      which indicators fired, their current values, what threshold
+      triggered the signal, and a plain-English template so you actually
+      learn. Always available, no external dependency.
+- [ ] Portfolio-level risk analysis — concentration score (Herfindahl
+      index + sector breakdown), pairwise correlation matrix, effective
+      leverage calculation, portfolio beta, max drawdown estimate, stress
+      scenarios ("if Nasdaq drops 10%, your portfolio drops ~X%"),
+      overall risk grade (A–F)
+- [ ] Sector & correlation heatmap — visualize how your holdings
+      correlate with each other and whether you're overexposed to a
+      single sector (e.g. tech-heavy with QQQ + SOXL + TQQQ)
+- [ ] What-if analysis — structured form (pick symbol + quantity) to
+      model hypothetical trades before executing: "if I add 10 shares of
+      AAPL, how does my portfolio risk change?" Shows before/after diff
+      of all risk metrics.
+- [ ] Structured LLM explainer — each risk metric has an "Explain"
+      button that generates a contextual, personalized paragraph. No
+      chat box, no free-text prompts. LLM receives precomputed risk data
+      via versioned prompt templates and explains it in plain language.
+      Output is validated (rejects hallucinated tickers), cached by data
+      hash, and falls back to deterministic templates if LLM is
+      unavailable. Framed as education, not financial advice.
 - [ ] Support for ETFs *and* individual stocks — same indicator engine
       for both; default watchlist seeded with QQQ, TQQQ, SOXL
 - [ ] Mobile-first responsive UI — usable on phone during market hours
@@ -28,14 +48,9 @@ Status reflects what's shipped to prod. See
 
 - [ ] Watchlist — add/remove symbols you're tracking but don't own yet;
       see the same indicator panel + signal without adding to portfolio
-- [ ] Historical signal chart — plot the buy/hold/sell signal over the
-      last 30/90/180 days overlaid on price, so you can see how accurate
-      the signals have been
 - [ ] Indicator deep-dive tooltips — tap any indicator for an
       educational popover: what it measures, how to read it, when it's
       most/least reliable, with a small illustrative chart
-- [ ] Alert thresholds — set per-symbol alerts (e.g. "notify me if RSI
-      drops below 30 or MACD crosses bullish")
 - [ ] Daily market summary — top-of-dashboard card summarizing today's
       macro picture: S&P 500, VIX, 10Y yield, fear & greed index
 
@@ -44,11 +59,11 @@ Status reflects what's shipped to prod. See
 - [ ] Auth + cloud sync — sign up so portfolio and watchlist persist
       across devices
 - [ ] Push / email notifications for triggered alerts
-- [ ] Sector & correlation heatmap — visualize how your holdings
-      correlate with each other and whether you're overexposed to a
-      single sector (e.g. tech-heavy with QQQ + SOXL + TQQQ)
-- [ ] Risk score for overall portfolio — not just per-symbol, but a
-      holistic "how risky is my entire portfolio" grade with breakdown
+- [ ] Alert thresholds — set per-symbol alerts (e.g. "notify me if RSI
+      drops below 30 or MACD crosses bullish")
+- [ ] Historical signal chart — plot the buy/hold/sell signal over the
+      last 30/90/180 days overlaid on price, so you can see how accurate
+      the signals have been
 - [ ] Backtesting — "if I had followed this signal for SYMBOL over the
       past 1/3/5 years, what would my return have been?" with equity
       curve chart
@@ -62,9 +77,6 @@ Status reflects what's shipped to prod. See
 - [ ] Learning center — short articles/cards explaining each indicator,
       portfolio concepts (diversification, rebalancing, dollar-cost
       averaging), and common mistakes
-- [ ] "What if" simulator — model hypothetical trades before executing:
-      "if I buy 10 shares of AAPL, how does my portfolio risk score
-      change?"
 - [ ] Trade journal — log your buy/sell decisions and the reasoning;
       review later against actual outcomes to improve over time
 - [ ] Guided stock screener — filter individual stocks by risk
@@ -83,9 +95,6 @@ Status reflects what's shipped to prod. See
       of users")
 - [ ] Broker integration (read-only via Plaid/broker API) — auto-import
       holdings instead of manual entry
-- [ ] AI chat — ask natural-language questions about your portfolio
-      ("am I too exposed to semiconductors?", "explain why TQQQ is
-      flagged as high risk")
 - [ ] Export to CSV / PDF for tax prep or advisor review
 
 ## Defer / Probably Skip
@@ -95,6 +104,7 @@ Status reflects what's shipped to prod. See
 - Social feed / community posts (stay focused on tools, not social)
 - Paid stock-pick newsletters (conflicts with the "learn to decide for yourself" mission)
 - Desktop-only features (mobile-first, period)
+- AI chatbot / free-text chat interface (looks like an API wrapper, not engineering)
 
 ## Data Sources
 
