@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-FalconUp — investment risk indicator web app for new/conservative investors. Portfolio dashboard, risk indicators (RSI, MACD, Bollinger, SMA crossover, ATR, beta, Sharpe), buy/hold/sell signals with explainers. See `docs/features.md` for the full feature ladder (V0–V2) and `docs/milestones.md` for sprint breakdown.
+FalconUp — portfolio intelligence platform for new/conservative investors. Per-symbol risk indicators (RSI, MACD, Bollinger, SMA crossover, ATR, beta, Sharpe) + portfolio-level risk analysis (concentration, correlation, effective leverage, stress scenarios) + structured LLM explainer layer (versioned prompts, output validation, deterministic fallback — no chatbot). See `docs/features.md` for the full feature ladder (V0–V2) and `docs/milestones.md` for sprint breakdown.
 
 Project motivation context:
 "i am a college student and i just got into investing. i dont
@@ -21,7 +21,8 @@ into it."
 
 ## Structure
 
-- `backend/` — FastAPI + Python 3.13 (API, indicator engine)
+- `backend/` — FastAPI + Python 3.13 (API, indicator engine, portfolio risk engine, LLM explainer)
+- `backend/llm/` — structured LLM layer (prompts/, context.py, validator.py, cache.py, client.py)
 - `frontend/` — Next.js 16 (App Router) + React 19 + TypeScript + Tailwind 4
 - `ops/` — Dockerfiles + Compose (backend, frontend)
 - `docs/` — Features, milestones
