@@ -22,12 +22,14 @@ into it."
 ## Structure
 
 - `backend/` — FastAPI + Python 3.13 (API, indicator engine)
+- `frontend/` — Next.js 16 (App Router) + React 19 + TypeScript + Tailwind 4
+- `ops/` — Docker Compose (Postgres, backend, frontend)
 - `docs/` — Features, milestones
 - `kkulgag/` — Sibling project (Korean bulletin board aggregator), separate git repo. See `kkulgag/CLAUDE.md`.
 
 ## Dev Commands
 
-### Backend (`backend/`)
+### Backend (from `backend/`)
 
 ```bash
 uv sync                                          # install deps
@@ -35,6 +37,15 @@ uv run uvicorn main:app --reload --port 40401     # run dev server
 uv run pytest                                     # all tests
 uv add <package>                                  # add a dependency
 uv add --dev <package>                            # add a dev dependency
+```
+
+### Frontend (from `frontend/`)
+
+```bash
+npm install                                       # install deps
+npm run dev                                       # dev server on port 4040
+npm run build                                     # production build
+npm run lint                                      # ESLint
 ```
 
 ### Database (from `backend/`)
@@ -46,16 +57,32 @@ uv run alembic upgrade head                       # apply migrations
 
 Never use `alembic revision --autogenerate` — Alembic migrations are the source of truth, ORM models are downstream.
 
+### Docker (from `ops/`)
+
+```bash
+docker compose up --build                         # build + start all services
+docker compose up                                 # start (reuse existing images)
+docker compose down                               # stop all services
+docker compose down -v                            # stop + delete database volume
+```
+
 ## Stack
 
-- **Backend:** FastAPI in `backend/`, managed by `uv`
-- **DB:** Postgres. Schema owned by Alembic migrations (hand-authored). SQLAlchemy ORM.
+- **Backend:** FastAPI in `backend/`, managed by `uv` (Python 3.13)
+- **Frontend:** Next.js 16 (App Router, Turbopack) in `frontend/`, React 19, Tailwind 4
+- **DB:** Postgres 17. Schema owned by Alembic migrations (hand-authored). SQLAlchemy ORM.
+- **Infra:** Docker Compose in `ops/` — three services: `db`, `backend`, `frontend`
 - **Environment:** direnv + `.env` (see `.env.example` for all variables)
 
 ## Ports
 
 - `WEB_PORT=4040` (Next.js in `frontend/`)
 - `FASTAPI_PORT=40401` (backend)
+
+## Pitfalls
+
+- **Next.js 16 breaking changes:** This project uses Next.js 16, which has breaking changes from earlier versions. Read `node_modules/next/dist/docs/` before writing frontend code. Do not assume APIs or conventions match Next.js 14/15.
+- **Docker PGHOST:** In Docker Compose, backend connects to Postgres via hostname `db` (the service name), not `localhost`. The compose file overrides `PGHOST=db`.
 
 ## Self-Maintenance Rule
 
