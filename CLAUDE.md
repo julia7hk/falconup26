@@ -23,7 +23,7 @@ into it."
 
 - `backend/` — FastAPI + Python 3.13 (API, indicator engine)
 - `frontend/` — Next.js 16 (App Router) + React 19 + TypeScript + Tailwind 4
-- `ops/` — Docker Compose (Postgres, backend, frontend)
+- `ops/` — Dockerfiles + Compose (backend, frontend)
 - `docs/` — Features, milestones
 - `kkulgag/` — Sibling project (Korean bulletin board aggregator), separate git repo. See `kkulgag/CLAUDE.md`.
 
@@ -60,18 +60,17 @@ Never use `alembic revision --autogenerate` — Alembic migrations are the sourc
 ### Docker (from `ops/`)
 
 ```bash
-docker compose up --build                         # build + start all services
-docker compose up                                 # start (reuse existing images)
-docker compose down                               # stop all services
-docker compose down -v                            # stop + delete database volume
+docker compose -f compose.build.yaml up --build   # build + start all services
+docker compose -f compose.build.yaml up -d        # start in daemon mode
+docker compose -f compose.build.yaml down         # stop all services
 ```
 
 ## Stack
 
 - **Backend:** FastAPI in `backend/`, managed by `uv` (Python 3.13)
 - **Frontend:** Next.js 16 (App Router, Turbopack) in `frontend/`, React 19, Tailwind 4
-- **DB:** Postgres 17. Schema owned by Alembic migrations (hand-authored). SQLAlchemy ORM.
-- **Infra:** Docker Compose in `ops/` — three services: `db`, `backend`, `frontend`
+- **DB:** Postgres 17 (hosted on nc01, not in Docker). Schema owned by Alembic migrations (hand-authored). SQLAlchemy ORM.
+- **Infra:** Docker Compose in `ops/` — two services: `backend`, `frontend`. Postgres runs on the host (nc01), not in a container.
 - **Environment:** direnv + `.env` (see `.env.example` for all variables)
 
 ## Ports
@@ -82,7 +81,7 @@ docker compose down -v                            # stop + delete database volum
 ## Pitfalls
 
 - **Next.js 16 breaking changes:** This project uses Next.js 16, which has breaking changes from earlier versions. Read `node_modules/next/dist/docs/` before writing frontend code. Do not assume APIs or conventions match Next.js 14/15.
-- **Docker PGHOST:** In Docker Compose, backend connects to Postgres via hostname `db` (the service name), not `localhost`. The compose file overrides `PGHOST=db`.
+- **No containerized Postgres:** Postgres runs on the host (nc01), not in Docker. Do not add a `db` service to Docker Compose. The backend container reaches host Postgres via the bridge network gateway (same pattern as kkulgag).
 
 ## Self-Maintenance Rule
 
