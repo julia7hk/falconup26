@@ -1,6 +1,6 @@
 # FalconUp Milestones — MVP
 
-> **V0 핵심**: portfolio dashboard + risk indicators + buy/hold/sell signal with explainer. Post-MVP items in [features.md](features.md) (V0.5–V2).
+> **V0 core**: portfolio dashboard + risk indicators + buy/hold/sell signal with explainer. Post-MVP items in [features.md](features.md) (V0.5–V2).
 
 ## Milestone 1: Project Foundation
 
@@ -8,7 +8,7 @@
 - [x] `uv` as Python package manager (`pyproject.toml`, lockfile)
 - [x] Alembic init in `backend/` — database migration management
 - [x] FastAPI in `backend/` — Python 3.13
-- [ ] Next.js (App Router) in `web/` — TypeScript + Tailwind, mobile-first
+- [x] Next.js (App Router) in `frontend/` — TypeScript + Tailwind, mobile-first
 - [ ] Docker + Compose in `ops/`
 - [ ] Github Actions CI/CD pipeline
 - [ ] Domain wiring + TLS
@@ -28,7 +28,7 @@
 - [ ] Migration: `price_history` table (symbol, date, OHLCV)
 - [ ] Migration: `indicator_snapshot` table (symbol, date, indicator values)
 - [ ] SQLAlchemy engine + async session
-- [ ] Prisma init in `web/` + db pull + generate
+- [ ] Prisma init in `frontend/` + db pull + generate
 - [ ] Seed default symbols (QQQ, TQQQ, SOXL)
 
 ## Milestone 4: Indicator Engine

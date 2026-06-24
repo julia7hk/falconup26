@@ -54,7 +54,7 @@ Never use `alembic revision --autogenerate` — Alembic migrations are the sourc
 
 ## Ports
 
-- `WEB_PORT=4040` (Next.js — not yet set up)
+- `WEB_PORT=4040` (Next.js in `frontend/`)
 - `FASTAPI_PORT=40401` (backend)
 
 ## Self-Maintenance Rule
