@@ -1,10 +1,13 @@
 FROM node:24-slim
 
+ARG NEXT_PUBLIC_FASTAPI_SERVER
+ENV NEXT_PUBLIC_FASTAPI_SERVER=$NEXT_PUBLIC_FASTAPI_SERVER
+
 WORKDIR /app
 
 # Install dependencies first (cached layer)
 COPY package.json package-lock.json* ./
-RUN npm install
+RUN npm ci
 
 # Copy application code
 COPY . .
