@@ -23,7 +23,7 @@ and evidence to put money into it."
 - `backend/` — FastAPI + Python 3.13 (API, indicator engine, portfolio risk engine, LLM explainer)
 - `backend/llm/` — structured LLM layer (prompts/, context.py, validator.py, cache.py, client.py)
 - `frontend/` — Next.js 16 (App Router) + React 19 + TypeScript + Tailwind 4
-- `ops/` — Dockerfiles, Compose (`compose.build.yaml` for local dev, `compose.yaml` for production)
+- `ops/` — Dockerfiles, Compose (`compose.build.yaml` for local dev, `compose.yaml` for production), nginx config
 - `docs/` — Features, milestones
 - `kkulgag/` — Sibling project (Korean bulletin board aggregator), separate git repo. See `kkulgag/CLAUDE.md`.
 
@@ -75,13 +75,15 @@ docker compose --env-file ../.env down             # stop all services
 - **Backend:** FastAPI in `backend/`, managed by `uv` (Python 3.13)
 - **Frontend:** Next.js 16 (App Router, Turbopack) in `frontend/`, React 19, Tailwind 4
 - **DB:** Postgres 17 (hosted on nc01, not in Docker). Schema owned by Alembic migrations (hand-authored). SQLAlchemy ORM.
-- **Infra:** Docker Compose in `ops/` — two services: `backend`, `frontend`. Postgres runs on the host (nc01), not in a container. Compose project name: `falconup-40`.
+- **Reverse proxy:** Nginx in Docker (`ops/nginx/conf.d/falconup.conf`). Path-based routing on `falconup.julia7hk.com`: `/api/*` → backend, everything else → Next.js. Only nginx exposes a host port (`${WEB_PORT}:80`); frontend and backend are internal to the Docker network.
+- **TLS:** Cloudflare (edge termination). Domain `falconup.julia7hk.com` is proxied through Cloudflare; nginx listens on port 80. SSL mode: Full.
+- **Infra:** Docker Compose in `ops/` — three services: `nginx`, `backend`, `frontend`. Postgres runs on the host (nc01), not in a container. Compose project name: `falconup-40`.
 - **CI/CD:** GitHub Actions → build + push to GHCR → Jenkins webhook → nc01 pulls and redeploys. Images: `ghcr.io/julia7hk/falconup26/backend`, `ghcr.io/julia7hk/falconup26/frontend`
 - **Environment:** direnv + `.env` (see `.env.example` for all variables)
 
 ## Ports
 
-- `WEB_PORT=4040` (Next.js in `frontend/`)
+- `WEB_PORT=4040` (nginx → exposed to host; proxies to frontend and backend)
 - `FASTAPI_PORT=40401` (backend)
 - Convention: project number 40 → ports 4**040** / 4**0401**
 

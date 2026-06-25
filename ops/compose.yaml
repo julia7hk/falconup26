@@ -18,6 +18,21 @@ services:
     networks:
       - falconup
 
+  nginx:
+    container_name: falconup-nginx
+    image: nginx:latest
+    restart: always
+    ports:
+      - "${WEB_PORT:-4040}:80"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/log:/var/log/nginx
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - falconup
+
   backend:
     container_name: falconup-backend
     image: ghcr.io/julia7hk/falconup26/backend:latest
@@ -43,8 +58,6 @@ services:
     container_name: falconup-frontend
     image: ghcr.io/julia7hk/falconup26/frontend:latest
     restart: always
-    ports:
-      - "${WEB_PORT:-4040}:4040"
     env_file:
       - ../.env
     depends_on:
