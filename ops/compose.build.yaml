@@ -1,5 +1,20 @@
 name: falconup-40
 services:
+  nginx:
+    container_name: falconup-nginx
+    image: nginx:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/log:/var/log/nginx
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - falconup
+
   backend:
     container_name: falconup-backend
     image: falconup-backend
@@ -7,12 +22,8 @@ services:
       context: ../backend
       dockerfile: ../ops/Dockerfile.backend
     restart: unless-stopped
-    ports:
-      - "${FASTAPI_PORT:-40401}:40401"
     env_file:
       - ../.env
-    environment:
-      PGHOST: host.docker.internal
     networks:
       - falconup
 
@@ -25,8 +36,6 @@ services:
       args:
         - NEXT_PUBLIC_FASTAPI_SERVER=${NEXT_PUBLIC_FASTAPI_SERVER}
     restart: unless-stopped
-    ports:
-      - "${WEB_PORT:-4040}:4040"
     env_file:
       - ../.env
     depends_on:
