@@ -13,7 +13,7 @@
 - [x] FastAPI in `backend/` — Python 3.13
 - [x] Next.js (App Router) in `frontend/` — TypeScript + Tailwind, mobile-first
 - [x] Docker + Compose in `ops/`
-- [ ] Github Actions CI/CD pipeline
+- [x] Github Actions CI/CD pipeline
 - [ ] Domain wiring + TLS
 
 ## Milestone 2: Data Source Integration
