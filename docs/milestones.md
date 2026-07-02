@@ -14,7 +14,7 @@
 - [x] Next.js (App Router) in `frontend/` — TypeScript + Tailwind, mobile-first
 - [x] Docker + Compose in `ops/`
 - [x] Github Actions CI/CD pipeline
-- [ ] Domain wiring + TLS
+- [x] Nginx + Domain wiring
 
 ## Milestone 2: Data Source Integration
 
