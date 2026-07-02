@@ -53,8 +53,8 @@ class YFinanceProvider:
         return bars
 
     def search_symbols(self, query: str) -> list[dict]:
-        results = yf.search(query, max_results=10)
-        if not results or "quotes" not in results:
+        search = yf.Search(query, max_results=10)
+        if not search.quotes:
             return []
         return [
             {
@@ -63,5 +63,5 @@ class YFinanceProvider:
                 "type": q.get("quoteType", ""),
                 "exchange": q.get("exchange", ""),
             }
-            for q in results["quotes"]
+            for q in search.quotes
         ]
