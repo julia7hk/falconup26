@@ -1,0 +1,58 @@
+name: falconup-40
+services:
+  # One-shot DB migration. Runs `alembic upgrade head` and exits; the app
+  # services wait for it to complete (service_completed_successfully) so they
+  # never start against a schema older than the code.
+  migrate:
+    container_name: falconup-migrate
+    image: ghcr.io/julia7hk/falconup26/backend:latest
+    restart: "no"
+    env_file:
+      - ../.env
+    command:
+      - uv
+      - run
+      - alembic
+      - upgrade
+      - head
+    networks:
+      - falconup
+
+  backend:
+    container_name: falconup-backend
+    image: ghcr.io/julia7hk/falconup26/backend:latest
+    restart: always
+    env_file:
+      - ../.env
+    command:
+      - uv
+      - run
+      - uvicorn
+      - main:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "40401"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - falconup
+
+  frontend:
+    container_name: falconup-frontend
+    image: ghcr.io/julia7hk/falconup26/frontend:latest
+    restart: always
+    ports:
+      - "${WEB_PORT:-4040}:4040"
+    env_file:
+      - ../.env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - falconup
+
+networks:
+  falconup:
+    driver: bridge

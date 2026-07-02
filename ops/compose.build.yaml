@@ -1,5 +1,8 @@
+name: falconup-40
 services:
   backend:
+    container_name: falconup-backend
+    image: falconup-backend
     build:
       context: ../backend
       dockerfile: ../ops/Dockerfile.backend
@@ -8,17 +11,29 @@ services:
       - "${FASTAPI_PORT:-40401}:40401"
     env_file:
       - ../.env
+    environment:
+      PGHOST: host.docker.internal
+    networks:
+      - falconup
 
   frontend:
+    container_name: falconup-frontend
+    image: falconup-frontend
     build:
       context: ../frontend
       dockerfile: ../ops/Dockerfile.frontend
+      args:
+        - NEXT_PUBLIC_FASTAPI_SERVER=${NEXT_PUBLIC_FASTAPI_SERVER}
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-4040}:4040"
     env_file:
       - ../.env
-    environment:
-      NEXT_PUBLIC_FASTAPI_SERVER: http://localhost:${FASTAPI_PORT:-40401}
     depends_on:
       - backend
+    networks:
+      - falconup
+
+networks:
+  falconup:
+    driver: bridge
