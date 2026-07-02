@@ -23,7 +23,7 @@ services:
     image: nginx:latest
     restart: always
     ports:
-      - "${WEB_PORT:-4040}:80"
+      - "80:80"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - ./nginx/log:/var/log/nginx

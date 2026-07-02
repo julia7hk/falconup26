@@ -74,24 +74,24 @@ docker compose --env-file ../.env down             # stop all services
 
 - **Backend:** FastAPI in `backend/`, managed by `uv` (Python 3.13)
 - **Frontend:** Next.js 16 (App Router, Turbopack) in `frontend/`, React 19, Tailwind 4
-- **DB:** Postgres 17 (hosted on nc01, not in Docker). Schema owned by Alembic migrations (hand-authored). SQLAlchemy ORM.
+- **DB:** Postgres 16 (hosted on oc40, not in Docker). Schema owned by Alembic migrations (hand-authored). SQLAlchemy ORM.
 - **Reverse proxy:** Nginx in Docker (`ops/nginx/conf.d/falconup.conf`). Path-based routing on `falconup.julia7hk.com`: `/api/*` → backend, everything else → Next.js. Only nginx exposes a host port (`${WEB_PORT}:80`); frontend and backend are internal to the Docker network.
 - **TLS:** Cloudflare (edge termination). Domain `falconup.julia7hk.com` is proxied through Cloudflare; nginx listens on port 80. SSL mode: Full.
-- **Infra:** Docker Compose in `ops/` — three services: `nginx`, `backend`, `frontend`. Postgres runs on the host (nc01), not in a container. Compose project name: `falconup-40`.
-- **CI/CD:** GitHub Actions → build + push to GHCR → Jenkins webhook → nc01 pulls and redeploys. Images: `ghcr.io/julia7hk/falconup26/backend`, `ghcr.io/julia7hk/falconup26/frontend`
+- **Infra:** Docker Compose in `ops/` — three services: `nginx`, `backend`, `frontend`. Postgres runs on the host (oc40), not in a container. Compose project name: `falconup-40`. Server: Oracle Cloud free tier Ampere ARM64 instance (`ssh ubuntu@oc40`).
+- **CI/CD:** GitHub Actions → build + push to GHCR. Images: `ghcr.io/julia7hk/falconup26/backend`, `ghcr.io/julia7hk/falconup26/frontend`. Deploy: pull on oc40 or build directly on oc40 with `compose.build.yaml`.
 - **Environment:** direnv + `.env` (see `.env.example` for all variables)
 
 ## Ports
 
-- `WEB_PORT=4040` (nginx → exposed to host; proxies to frontend and backend)
+- Port 80 (nginx → exposed to host; proxies to frontend and backend)
 - `FASTAPI_PORT=40401` (backend)
 - Convention: project number 40 → ports 4**040** / 4**0401**
 
 ## Pitfalls
 
 - **Next.js 16 breaking changes:** This project uses Next.js 16, which has breaking changes from earlier versions. Read `node_modules/next/dist/docs/` before writing frontend code. Do not assume APIs or conventions match Next.js 14/15.
-- **No containerized Postgres:** Postgres runs on the host (nc01), not in Docker. Do not add a `db` service to Docker Compose. The backend container reaches host Postgres via the bridge network gateway (same pattern as kkulgag).
-- **PGHOST in Docker:** `.env` has `PGHOST=localhost` which works for bare-metal dev but not inside containers. `compose.build.yaml` overrides it to `host.docker.internal` (Docker Desktop). On Linux/nc01 production, the `.env` on that host should set `PGHOST` to the bridge gateway IP (e.g. `172.17.0.1`).
+- **No containerized Postgres:** Postgres runs on the host (oc40), not in Docker. Do not add a `db` service to Docker Compose. The backend container reaches host Postgres via the Docker bridge gateway IP.
+- **PGHOST in Docker:** `.env` has `PGHOST=localhost` which works for bare-metal dev but not inside containers. On Mac (Docker Desktop) set `PGHOST=host.docker.internal`. On oc40 (Linux) set `PGHOST=172.17.0.1` (Docker bridge gateway). Postgres `pg_hba.conf` and `listen_addresses` must allow connections from `172.16.0.0/12`.
 - **NEXT_PUBLIC_* vars are build-time:** Next.js inlines `NEXT_PUBLIC_*` env vars into the JS bundle during `npm run build`. They must be passed as Docker build args (`ARG`/`ENV` in Dockerfile), not just runtime env vars. Changing them requires a rebuild.
 
 ## Self-Maintenance Rule

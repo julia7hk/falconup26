@@ -5,7 +5,7 @@ services:
     image: nginx:latest
     restart: unless-stopped
     ports:
-      - "${WEB_PORT:-4040}:80"
+      - "80:80"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - ./nginx/log:/var/log/nginx
@@ -24,8 +24,6 @@ services:
     restart: unless-stopped
     env_file:
       - ../.env
-    environment:
-      PGHOST: host.docker.internal
     networks:
       - falconup
 
