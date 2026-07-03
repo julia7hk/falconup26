@@ -10,7 +10,7 @@ from datetime import date
 from functools import lru_cache
 
 from market.cache import TTLCache
-from market.models import OHLCV, Quote
+from market.models import OHLCV, Quote, SectorInfo
 from market.provider import DataProvider
 from market.yfinance_provider import YFinanceProvider
 
@@ -18,6 +18,7 @@ from market.yfinance_provider import YFinanceProvider
 _QUOTE_TTL = 60  # current price: 1 min
 _HISTORY_TTL = 3600  # daily bars: 1 hour (only changes after market close)
 _SEARCH_TTL = 86400  # symbol search: 24 hours
+_SECTOR_TTL = 86400 * 7  # sector/industry: 7 days (essentially static)
 
 
 class PriceFetcher:
@@ -60,6 +61,16 @@ class PriceFetcher:
         results = self._provider.search_symbols(query)
         self._cache.set(key, results, ttl=_SEARCH_TTL)
         return results
+
+    def get_sector_info(self, symbol: str) -> SectorInfo:
+        symbol = symbol.upper()
+        key = f"sector:{symbol}"
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+        info = self._provider.get_sector_info(symbol)
+        self._cache.set(key, info, ttl=_SECTOR_TTL)
+        return info
 
 
 @lru_cache(maxsize=1)

@@ -46,6 +46,16 @@ def test_get_history():
     assert "close" in data[0]
 
 
+@patch("routers.symbols.get_price_fetcher", _patched_fetcher)
+def test_get_sector_info():
+    resp = client.get("/api/symbols/QQQ/sector")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["symbol"] == "QQQ"
+    assert data["sector"] == "Technology"
+    assert data["is_etf"] is True
+
+
 def test_search_requires_query():
     resp = client.get("/api/symbols/search")
     assert resp.status_code == 422  # missing required param

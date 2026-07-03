@@ -6,7 +6,29 @@ from datetime import date, datetime, timezone
 
 import yfinance as yf
 
-from market.models import OHLCV, Quote
+from market.models import OHLCV, Quote, SectorInfo
+
+# Hardcoded ETF categories for concentration analysis.
+# yfinance doesn't return sector/industry for ETFs, so we tag them manually.
+_ETF_CATEGORY_MAP: dict[str, tuple[str, str]] = {
+    "QQQ":   ("Technology",   "Broad Market Tech ETF"),
+    "TQQQ":  ("Technology",   "Leveraged Tech ETF"),
+    "SQQQ":  ("Technology",   "Inverse Leveraged Tech ETF"),
+    "SOXL":  ("Technology",   "Leveraged Semiconductor ETF"),
+    "SOXX":  ("Technology",   "Semiconductor ETF"),
+    "XLK":   ("Technology",   "Technology Sector ETF"),
+    "ARKK":  ("Technology",   "Innovation ETF"),
+    "SPY":   ("Broad Market", "S&P 500 ETF"),
+    "VOO":   ("Broad Market", "S&P 500 ETF"),
+    "VTI":   ("Broad Market", "Total US Market ETF"),
+    "IWM":   ("Broad Market", "Small-Cap ETF"),
+    "DIA":   ("Broad Market", "Dow Jones ETF"),
+    "XLF":   ("Financials",   "Financial Sector ETF"),
+    "XLE":   ("Energy",       "Energy Sector ETF"),
+    "GLD":   ("Commodities",  "Gold ETF"),
+    "TLT":   ("Fixed Income", "Long-Term Treasury ETF"),
+    "BND":   ("Fixed Income", "Total Bond ETF"),
+}
 
 
 class YFinanceProvider:
@@ -65,3 +87,17 @@ class YFinanceProvider:
             }
             for q in search.quotes
         ]
+
+    def get_sector_info(self, symbol: str) -> SectorInfo:
+        symbol = symbol.upper()
+        # Fast path: known ETFs
+        if symbol in _ETF_CATEGORY_MAP:
+            sector, industry = _ETF_CATEGORY_MAP[symbol]
+            return SectorInfo(symbol=symbol, sector=sector, industry=industry, is_etf=True)
+        # Individual stock: ask yfinance
+        ticker = yf.Ticker(symbol)
+        info = ticker.info
+        sector = info.get("sector", "Unknown")
+        industry = info.get("industry", "Unknown")
+        is_etf = sector == "Unknown"
+        return SectorInfo(symbol=symbol, sector=sector, industry=industry, is_etf=is_etf)

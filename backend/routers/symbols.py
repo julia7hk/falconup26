@@ -58,3 +58,19 @@ def get_history(
         }
         for bar in bars
     ]
+
+
+@router.get("/{ticker}/sector")
+def get_sector_info(ticker: str):
+    """Sector/industry classification for a symbol."""
+    fetcher = get_price_fetcher()
+    try:
+        info = fetcher.get_sector_info(ticker)
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail=f"Symbol not found: {ticker}") from exc
+    return {
+        "symbol": info.symbol,
+        "sector": info.sector,
+        "industry": info.industry,
+        "is_etf": info.is_etf,
+    }

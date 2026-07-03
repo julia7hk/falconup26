@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 
 from market.fetcher import PriceFetcher
-from market.models import OHLCV, Quote
+from market.models import OHLCV, Quote, SectorInfo
 
 
 class FakeProvider:
@@ -14,6 +14,7 @@ class FakeProvider:
     def __init__(self):
         self.quote_calls = 0
         self.history_calls = 0
+        self.sector_calls = 0
 
     def get_quote(self, symbol: str) -> Quote:
         self.quote_calls += 1
@@ -33,6 +34,10 @@ class FakeProvider:
 
     def search_symbols(self, query: str) -> list[dict]:
         return [{"symbol": "QQQ", "name": "Invesco QQQ Trust"}]
+
+    def get_sector_info(self, symbol: str) -> SectorInfo:
+        self.sector_calls += 1
+        return SectorInfo(symbol=symbol.upper(), sector="Technology", industry="Broad Market Tech ETF", is_etf=True)
 
 
 def test_get_quote():
@@ -73,3 +78,20 @@ def test_search():
     fetcher = PriceFetcher(provider)
     results = fetcher.search_symbols("qqq")
     assert results[0]["symbol"] == "QQQ"
+
+
+def test_get_sector_info():
+    provider = FakeProvider()
+    fetcher = PriceFetcher(provider)
+    info = fetcher.get_sector_info("qqq")
+    assert info.symbol == "QQQ"
+    assert info.sector == "Technology"
+    assert info.is_etf is True
+
+
+def test_sector_info_is_cached():
+    provider = FakeProvider()
+    fetcher = PriceFetcher(provider)
+    fetcher.get_sector_info("QQQ")
+    fetcher.get_sector_info("QQQ")
+    assert provider.sector_calls == 1

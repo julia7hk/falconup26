@@ -23,7 +23,7 @@
 - [x] Price fetcher — current price, historical OHLCV (daily)
 - [x] Rate limiting + caching layer — TTL cache (quotes 1 min, history 1 hr, search 24 hr)
 - [x] FRED integration for macro data (VIX, yield curves, fed funds rate) — `/api/macro/*` endpoints, 1hr cache
-- [ ] Sector/industry data per symbol (for concentration analysis)
+- [x] Sector/industry data per symbol (for concentration analysis) — ETF category map + yfinance fallback, `/api/symbols/{ticker}/sector`
 
 ## Milestone 3: Database Schema
 

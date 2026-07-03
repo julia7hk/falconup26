@@ -27,3 +27,13 @@ class Quote:
     change: float
     change_percent: float
     timestamp: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class SectorInfo:
+    """Sector/industry classification for a symbol."""
+
+    symbol: str
+    sector: str
+    industry: str
+    is_etf: bool

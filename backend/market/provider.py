@@ -13,7 +13,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Protocol
 
-from market.models import OHLCV, Quote
+from market.models import OHLCV, Quote, SectorInfo
 
 
 class DataProvider(Protocol):
@@ -37,4 +37,8 @@ class DataProvider(Protocol):
 
         Returns a list of dicts with at least 'symbol' and 'name' keys.
         """
+        ...
+
+    def get_sector_info(self, symbol: str) -> SectorInfo:
+        """Fetch sector/industry classification for a symbol."""
         ...
