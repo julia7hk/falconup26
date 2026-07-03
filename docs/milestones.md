@@ -18,11 +18,11 @@
 
 ## Milestone 2: Data Source Integration
 
-- [ ] Evaluate market data APIs (Yahoo Finance, Alpha Vantage, Twelve Data, Polygon, Finnhub)
-- [ ] Select primary + fallback data source
-- [ ] Price fetcher — current price, historical OHLCV (daily)
-- [ ] Rate limiting + caching layer
-- [ ] FRED integration for macro data (VIX, yield curves, fed funds rate)
+- [x] Evaluate market data APIs (Yahoo Finance, Alpha Vantage, Twelve Data, Polygon, Finnhub)
+- [x] Select primary + fallback data source — yfinance (primary), abstraction layer (`DataProvider` protocol) allows one-line swap
+- [x] Price fetcher — current price, historical OHLCV (daily)
+- [x] Rate limiting + caching layer — TTL cache (quotes 1 min, history 1 hr, search 24 hr)
+- [x] FRED integration for macro data (VIX, yield curves, fed funds rate) — `/api/macro/*` endpoints, 1hr cache
 - [ ] Sector/industry data per symbol (for concentration analysis)
 
 ## Milestone 3: Database Schema
