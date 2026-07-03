@@ -21,11 +21,13 @@ and evidence to put money into it."
 ## Structure
 
 - `backend/` — FastAPI + Python 3.13 (API, indicator engine, portfolio risk engine, LLM explainer)
-- `backend/llm/` — structured LLM layer (prompts/, context.py, validator.py, cache.py, client.py)
-- `frontend/` — Next.js 16 (App Router) + React 19 + TypeScript + Tailwind 4
+- `backend/market/` — market data abstraction layer (provider protocol, yfinance impl, FRED macro data, Redis cache)
+- `backend/routers/` — FastAPI route handlers (`symbols.py`, `macro.py`)
+- `backend/llm/` — structured LLM layer (prompts/, context.py, validator.py, cache.py, client.py) — not yet implemented
+- `frontend/` — Next.js 16 (App Router) + React 19 + TypeScript + Tailwind 4 — still boilerplate
 - `ops/` — Dockerfiles, Compose (`compose.build.yaml` for local dev, `compose.yaml` for production), nginx config
 - `docs/` — Features, milestones
-- `kkulgag/` — Sibling project (Korean bulletin board aggregator), separate git repo. See `kkulgag/CLAUDE.md`.
+- `kkulgag/` — Sibling project (Korean bulletin board aggregator), separate git repo on nc01 (not oc40). See `kkulgag/CLAUDE.md`.
 
 ## Dev Commands
 
@@ -34,7 +36,9 @@ and evidence to put money into it."
 ```bash
 uv sync                                          # install deps
 uv run uvicorn main:app --reload --port 40401     # run dev server
-uv run pytest                                     # all tests
+uv run pytest                                     # all tests (fakeredis mocks Redis, no server needed)
+uv run pytest tests/test_fred.py -v               # single test file
+uv run pytest tests/test_fred.py::test_get_vix -v # single test
 uv add <package>                                  # add a dependency
 uv add --dev <package>                            # add a dev dependency
 ```
@@ -74,12 +78,40 @@ docker compose --env-file ../.env down             # stop all services
 
 - **Backend:** FastAPI in `backend/`, managed by `uv` (Python 3.13)
 - **Frontend:** Next.js 16 (App Router, Turbopack) in `frontend/`, React 19, Tailwind 4
-- **DB:** Postgres 16 (hosted on oc40, not in Docker). Schema owned by Alembic migrations (hand-authored). SQLAlchemy ORM.
+- **DB:** Postgres 16 (hosted on oc40, not in Docker). Schema owned by Alembic migrations (hand-authored). SQLAlchemy ORM. No migrations written yet.
+- **Cache:** Redis (hosted on oc40, not in Docker). Used by `market/cache.py` for market data caching. `REDIS_URL` in `.env`. Tests use `fakeredis` (no running Redis needed).
 - **Reverse proxy:** Nginx in Docker (`ops/nginx/conf.d/falconup.conf`). Path-based routing on `falconup.julia7hk.com`: `/api/*` → backend, everything else → Next.js. Only nginx exposes a host port (`${WEB_PORT}:80`); frontend and backend are internal to the Docker network.
 - **TLS:** Cloudflare (edge termination). Domain `falconup.julia7hk.com` is proxied through Cloudflare; nginx listens on port 80. SSL mode: Full.
-- **Infra:** Docker Compose in `ops/` — three services: `nginx`, `backend`, `frontend`. Postgres runs on the host (oc40), not in a container. Compose project name: `falconup-40`. Server: Oracle Cloud free tier Ampere ARM64 instance (`ssh ubuntu@oc40`).
+- **Infra:** Docker Compose in `ops/` — three services: `nginx`, `backend`, `frontend`. Postgres and Redis run on the host (oc40), not in containers. Compose project name: `falconup-40`. Server: Oracle Cloud free tier Ampere ARM64 instance (`ssh ubuntu@oc40`).
 - **CI/CD:** GitHub Actions → build + push to GHCR. Images: `ghcr.io/julia7hk/falconup26/backend`, `ghcr.io/julia7hk/falconup26/frontend`. Deploy: pull on oc40 or build directly on oc40 with `compose.build.yaml`.
 - **Environment:** direnv + `.env` (see `.env.example` for all variables)
+
+## Architecture
+
+### Market Data Layer (`backend/market/`)
+
+```
+DataProvider (protocol)          → abstract interface for any data source
+├── YFinanceProvider             → yfinance implementation (quotes, history, search, sector)
+└── (future providers)           → swap by changing one line in fetcher.py
+
+PriceFetcher                     → cached wrapper around any DataProvider
+└── TTLCache (Redis-backed)      → pickle-serialized, prefix-namespaced keys (falconup:*)
+    ├── quotes: 1 min TTL
+    ├── history: 1 hour TTL
+    ├── search: 24 hour TTL
+    └── sector: 7 day TTL
+
+FredProvider (separate)          → FRED API for macro data (fed funds, VIX, treasuries)
+└── TTLCache (Redis-backed)      → 1 hour TTL (data changes at most once/day)
+```
+
+- `provider.py` — `DataProvider` protocol. Add new methods here when extending.
+- `yfinance_provider.py` — concrete implementation. Includes `_ETF_CATEGORY_MAP` (17 hardcoded ETFs) for sector classification since yfinance doesn't return sectors for ETFs.
+- `fetcher.py` — `PriceFetcher` wraps a provider with caching. Singleton via `@lru_cache`. The rest of the app imports `get_price_fetcher()`.
+- `fred.py` — `FredProvider` for macro data. Singleton via `@lru_cache`. Requires `FRED_API_KEY` env var.
+- `cache.py` — `TTLCache` backed by Redis with pickle serialization.
+- `models.py` — `Quote`, `OHLCV`, `SectorInfo` dataclasses (frozen, slotted).
 
 ## Ports
 
@@ -90,8 +122,9 @@ docker compose --env-file ../.env down             # stop all services
 ## Pitfalls
 
 - **Next.js 16 breaking changes:** This project uses Next.js 16, which has breaking changes from earlier versions. Read `node_modules/next/dist/docs/` before writing frontend code. Do not assume APIs or conventions match Next.js 14/15.
-- **No containerized Postgres:** Postgres runs on the host (oc40), not in Docker. Do not add a `db` service to Docker Compose. The backend container reaches host Postgres via the Docker bridge gateway IP.
+- **No containerized Postgres or Redis:** Both run on the host (oc40), not in Docker. Do not add `db` or `redis` services to Docker Compose. The backend container reaches them via the Docker bridge gateway IP.
 - **PGHOST in Docker:** `.env` has `PGHOST=localhost` which works for bare-metal dev but not inside containers. On Mac (Docker Desktop) set `PGHOST=host.docker.internal`. On oc40 (Linux) set `PGHOST=172.17.0.1` (Docker bridge gateway). Postgres `pg_hba.conf` and `listen_addresses` must allow connections from `172.16.0.0/12`.
+- **REDIS_URL in Docker:** Same issue as PGHOST. `.env` has `REDIS_URL=redis://localhost:6379/0` which works for bare-metal dev. On oc40 set `REDIS_URL=redis://172.17.0.1:6379/0`. Redis `bind` config must include `172.17.0.1` (or `0.0.0.0`) and `protected-mode` should be `no` (or set a password).
 - **NEXT_PUBLIC_* vars are build-time:** Next.js inlines `NEXT_PUBLIC_*` env vars into the JS bundle during `npm run build`. They must be passed as Docker build args (`ARG`/`ENV` in Dockerfile), not just runtime env vars. Changing them requires a rebuild.
 
 ## Self-Maintenance Rule
