@@ -14,16 +14,16 @@
 - [x] Next.js (App Router) in `frontend/` — TypeScript + Tailwind, mobile-first
 - [x] Docker + Compose in `ops/`
 - [x] Github Actions CI/CD pipeline
-- [ ] Domain wiring + TLS
+- [x] Nginx + Domain wiring
 
 ## Milestone 2: Data Source Integration
 
-- [ ] Evaluate market data APIs (Yahoo Finance, Alpha Vantage, Twelve Data, Polygon, Finnhub)
-- [ ] Select primary + fallback data source
-- [ ] Price fetcher — current price, historical OHLCV (daily)
-- [ ] Rate limiting + caching layer
-- [ ] FRED integration for macro data (VIX, yield curves, fed funds rate)
-- [ ] Sector/industry data per symbol (for concentration analysis)
+- [x] Evaluate market data APIs (Yahoo Finance, Alpha Vantage, Twelve Data, Polygon, Finnhub)
+- [x] Select primary + fallback data source — yfinance (primary), abstraction layer (`DataProvider` protocol) allows one-line swap
+- [x] Price fetcher — current price, historical OHLCV (daily)
+- [x] Rate limiting + caching layer — TTL cache (quotes 1 min, history 1 hr, search 24 hr)
+- [x] FRED integration for macro data (VIX, yield curves, fed funds rate) — `/api/macro/*` endpoints, 1hr cache
+- [x] Sector/industry data per symbol (for concentration analysis) — ETF category map + yfinance fallback, `/api/symbols/{ticker}/sector`
 
 ## Milestone 3: Database Schema
 
