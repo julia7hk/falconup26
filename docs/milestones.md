@@ -31,7 +31,7 @@
 - [x] Migration: `portfolio_holding` table (symbol, shares, avg_cost)
 - [x] Migration: `price_history` table (symbol, date, OHLCV)
 - [x] Migration: `macro_history` table (series: fed_funds/vix/treasury_2y/treasury_10y, date, value)
-- [ ] SQLAlchemy engine + async session
+- [x] SQLAlchemy engine + async session
 - [ ] Seed default symbols (QQQ, TQQQ, SOXL) with leverage factors + sector data
 - [ ] One-time backfill script — pull historical OHLCV + FRED data into Postgres
 
