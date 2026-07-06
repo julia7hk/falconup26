@@ -27,14 +27,13 @@
 
 ## Milestone 3: Database Schema
 
-- [ ] Migration: `symbol` table (ticker, name, type: ETF/stock, sector, industry, leverage_factor)
-- [ ] Migration: `portfolio_holding` table (symbol, shares, avg_cost)
-- [ ] Migration: `price_history` table (symbol, date, OHLCV)
-- [ ] Migration: `indicator_snapshot` table (symbol, date, indicator values)
-- [ ] Migration: `portfolio_risk_snapshot` table (concentration score, effective leverage, portfolio beta, max drawdown estimate, correlation matrix blob, risk grade, computed_at)
-- [ ] Migration: `llm_analysis_cache` table (prompt_version, data_hash, response, created_at, ttl)
-- [ ] SQLAlchemy engine + async session
-- [ ] Seed default symbols (QQQ, TQQQ, SOXL) with leverage factors + sector data
+- [x] Migration: `symbol` table (ticker, name, type: ETF/stock, sector, industry, leverage_factor)
+- [x] Migration: `portfolio_holding` table (symbol, shares, avg_cost)
+- [x] Migration: `price_history` table (symbol, date, OHLCV)
+- [x] Migration: `macro_history` table (series: fed_funds/vix/treasury_2y/treasury_10y, date, value)
+- [x] SQLAlchemy engine + async session
+- [x] Seed default symbols (QQQ, TQQQ, SOXL + 13 more) with leverage factors + sector data
+- [x] One-time backfill script — pull historical OHLCV + FRED data into Postgres
 
 ## Milestone 4a: Per-Symbol Indicator Engine
 
@@ -47,6 +46,7 @@
 - [ ] Sharpe ratio (1-year, risk-free rate from FRED)
 - [ ] Composite signal score — weighted aggregate of all indicators
 - [ ] Buy / Hold / Sell classification from composite score + confidence level
+- [ ] Migration: `indicator_snapshot` table (symbol, date, indicator values, composite score, signal, confidence) — persist when needed
 
 ## Milestone 4b: Portfolio Risk Engine
 
@@ -57,6 +57,7 @@
 - [ ] Max drawdown estimate — historical volatility x effective leverage
 - [ ] Stress scenarios — model portfolio impact for predefined shocks (Nasdaq -10%, rates +1%, semiconductor crash)
 - [ ] Overall portfolio risk grade (A–F) from composite of above metrics
+- [ ] Migration: `portfolio_risk_snapshot` table (concentration, leverage, beta, drawdown, correlation matrix, risk grade) — persist when needed
 - [ ] What-if engine — recompute all portfolio risk metrics with a hypothetical position added/removed, return structured diff
 
 ## Milestone 5: Explainer Layer
@@ -82,6 +83,7 @@ into personalized, contextual explanations. No chat box, no free-text input.
 - [ ] Context assembler (`backend/llm/context.py`) — takes typed risk data from the engine, formats into structured prompt context
 - [ ] Output validator (`backend/llm/validator.py`) — reject responses that reference symbols not in portfolio, enforce output structure, catch hallucinations
 - [ ] Deterministic fallback — if LLM is unavailable or validation fails, serve template-string explanations from 5a (app never gates on LLM)
+- [ ] Migration: `llm_analysis_cache` table (prompt_version, data_hash, response, created_at, ttl)
 - [ ] Response cache (`backend/llm/cache.py`) — keyed on (prompt_version, data_hash). Same portfolio state = same explanation. No redundant API calls.
 - [ ] API client (`backend/llm/client.py`) — thin wrapper with retry, timeout, rate limiting
 - [ ] Education framing — all LLM outputs wrapped with disclaimer, framed as education not financial advice

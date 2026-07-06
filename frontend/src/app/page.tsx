@@ -1,6 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+type CatalogSymbol = {
+  ticker: string;
+  name: string;
+  type: string;
+  sector: string;
+  leverage_factor: number;
+  latest_close: number | null;
+  latest_date: string | null;
+};
+
+type PriceBar = {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+};
 
 type Quote = {
   symbol: string;
@@ -34,7 +53,39 @@ type SearchResult = {
   exchange: string;
 };
 
+function Sparkline({ data }: { data: PriceBar[] }) {
+  if (data.length < 2) return null;
+  const closes = data.map((d) => d.close);
+  const min = Math.min(...closes);
+  const max = Math.max(...closes);
+  const range = max - min || 1;
+  const w = 600;
+  const h = 120;
+  const points = closes
+    .map((c, i) => {
+      const x = (i / (closes.length - 1)) * w;
+      const y = h - ((c - min) / range) * (h - 10) - 5;
+      return `${x},${y}`;
+    })
+    .join(" ");
+  const trending = closes[closes.length - 1] >= closes[0];
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-48">
+      <polyline
+        fill="none"
+        stroke={trending ? "#22c55e" : "#ef4444"}
+        strokeWidth="2"
+        points={points}
+      />
+    </svg>
+  );
+}
+
 export default function Home() {
+  const [catalog, setCatalog] = useState<CatalogSymbol[]>([]);
+  const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
+  const [history, setHistory] = useState<PriceBar[]>([]);
+  const [historyDays, setHistoryDays] = useState(365);
   const [symbol, setSymbol] = useState("");
   const [quote, setQuote] = useState<Quote | null>(null);
   const [sector, setSector] = useState<SectorInfo | null>(null);
@@ -42,6 +93,24 @@ export default function Home() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/symbols/catalog")
+      .then((res) => res.json())
+      .then(setCatalog)
+      .catch(() => {});
+  }, []);
+
+  async function selectSymbol(ticker: string, days = historyDays) {
+    setSelectedTicker(ticker);
+    setHistory([]);
+    try {
+      const res = await fetch(
+        `/api/symbols/${ticker}/history-db?days=${days}`
+      );
+      if (res.ok) setHistory(await res.json());
+    } catch {}
+  }
 
   async function lookupSymbol() {
     if (!symbol.trim()) return;
@@ -90,14 +159,124 @@ export default function Home() {
 
   return (
     <div className="flex flex-col flex-1 items-center bg-zinc-50 font-sans dark:bg-zinc-950">
-      <main className="flex flex-1 w-full max-w-3xl flex-col gap-8 py-12 px-6">
-        <h1 className="text-3xl font-bold tracking-tight dark:text-white">
+      <main className="flex flex-1 w-full max-w-6xl flex-col gap-10 py-12 px-8">
+        <h1 className="text-4xl font-bold tracking-tight dark:text-white">
           FalconUp
         </h1>
 
+        {/* Symbol Catalog */}
+        <section className="flex flex-col gap-6">
+          <h2 className="text-xl font-semibold dark:text-zinc-200">
+            Symbol Catalog
+            <span className="ml-2 text-base font-normal text-zinc-400">
+              {catalog.length} symbols in database
+            </span>
+          </h2>
+          {[
+            { label: "Index ETFs", filter: (s: CatalogSymbol) => s.type === "etf" && s.leverage_factor === 1 },
+            { label: "Leveraged ETFs", filter: (s: CatalogSymbol) => s.type === "etf" && s.leverage_factor !== 1 },
+            { label: "Stocks", filter: (s: CatalogSymbol) => s.type === "stock" },
+          ].map((group) => {
+            const items = catalog.filter(group.filter);
+            if (items.length === 0) return null;
+            return (
+              <div key={group.label} className="flex flex-col gap-2">
+                <h3 className="text-base font-medium text-zinc-500 dark:text-zinc-400">
+                  {group.label}
+                </h3>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
+                  {items.map((s) => (
+              <button
+                key={s.ticker}
+                onClick={() => selectSymbol(s.ticker)}
+                className={`rounded-lg border p-3 text-left transition-colors ${
+                  selectedTicker === s.ticker
+                    ? "border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-950"
+                    : "border-zinc-200 hover:border-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-500"
+                }`}
+              >
+                <div className="flex items-baseline justify-between">
+                  <span className="font-mono font-bold dark:text-white">
+                    {s.ticker}
+                  </span>
+                  {s.leverage_factor !== 1 && (
+                    <span className="rounded bg-amber-100 px-1 text-xs font-medium text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                      {s.leverage_factor}x
+                    </span>
+                  )}
+                </div>
+                <p className="mt-0.5 truncate text-sm text-zinc-500 dark:text-zinc-400">
+                  {s.name}
+                </p>
+                {s.latest_close && (
+                  <p className="mt-1 font-mono text-base font-semibold dark:text-zinc-200">
+                    ${s.latest_close.toFixed(2)}
+                  </p>
+                )}
+                <p className="text-xs text-zinc-400">{s.sector}</p>
+              </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </section>
+
+        {/* Price History Chart */}
+        {selectedTicker && (
+          <section className="flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold dark:text-zinc-200">
+                {selectedTicker} — Price History
+              </h2>
+              <div className="flex gap-1">
+                {[
+                  { label: "3M", days: 90 },
+                  { label: "6M", days: 180 },
+                  { label: "1Y", days: 365 },
+                  { label: "3Y", days: 1095 },
+                  { label: "5Y", days: 1825 },
+                ].map((opt) => (
+                  <button
+                    key={opt.label}
+                    onClick={() => {
+                      setHistoryDays(opt.days);
+                      selectSymbol(selectedTicker, opt.days);
+                    }}
+                    className={`rounded px-3 py-1.5 text-sm font-medium ${
+                      historyDays === opt.days
+                        ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                        : "text-zinc-500 hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {history.length > 0 ? (
+              <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
+                <Sparkline data={history} />
+                <div className="mt-3 flex justify-between text-sm text-zinc-400">
+                  <span>{history[0].date}</span>
+                  <span>
+                    {history.length} trading days ·{" "}
+                    Low ${Math.min(...history.map((h) => h.low)).toFixed(2)} ·{" "}
+                    High ${Math.max(...history.map((h) => h.high)).toFixed(2)}
+                  </span>
+                  <span>{history[history.length - 1].date}</span>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-zinc-400">Loading...</p>
+            )}
+          </section>
+        )}
+
         {/* Symbol Lookup */}
         <section className="flex flex-col gap-4">
-          <h2 className="text-lg font-semibold dark:text-zinc-200">
+          <h2 className="text-xl font-semibold dark:text-zinc-200">
             Symbol Lookup
           </h2>
           <div className="flex gap-2">
@@ -107,18 +286,18 @@ export default function Home() {
               onChange={(e) => setSymbol(e.target.value.toUpperCase())}
               onKeyDown={(e) => e.key === "Enter" && lookupSymbol()}
               placeholder="e.g. QQQ, AAPL"
-              className="flex-1 rounded-lg border border-zinc-300 px-4 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+              className="flex-1 rounded-lg border border-zinc-300 px-4 py-2.5 text-base dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
             />
             <button
               onClick={lookupSymbol}
               disabled={loading}
-              className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+              className="rounded-lg bg-zinc-900 px-5 py-2.5 text-base font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
             >
               {loading ? "..." : "Lookup"}
             </button>
             <button
               onClick={searchSymbols}
-              className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              className="rounded-lg border border-zinc-300 px-5 py-2.5 text-base font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
             >
               Search
             </button>
@@ -205,7 +384,7 @@ export default function Home() {
         {/* Macro Snapshot */}
         <section className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold dark:text-zinc-200">
+            <h2 className="text-xl font-semibold dark:text-zinc-200">
               Macro Indicators
             </h2>
             <button
@@ -217,7 +396,7 @@ export default function Home() {
           </div>
 
           {macro && (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
               {[
                 { label: "Fed Funds Rate", value: macro.fed_funds_rate, suffix: "%" },
                 { label: "VIX", value: macro.vix, suffix: "" },
@@ -230,10 +409,10 @@ export default function Home() {
                   key={item.label}
                   className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700"
                 >
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400">
                     {item.label}
                   </p>
-                  <p className="text-lg font-semibold font-mono dark:text-white">
+                  <p className="text-xl font-semibold font-mono dark:text-white">
                     {item.value !== null ? `${item.value}${item.suffix}` : "—"}
                   </p>
                 </div>

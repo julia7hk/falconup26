@@ -4,11 +4,75 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from db import get_session
 from market import get_price_fetcher
 
 router = APIRouter(prefix="/api/symbols", tags=["symbols"])
+
+
+@router.get("/catalog")
+async def list_symbols(session: AsyncSession = Depends(get_session)):
+    """All symbols in the database with their latest closing price."""
+    result = await session.execute(text("""
+        SELECT s.ticker, s.name, s.type, s.sector, s.leverage_factor,
+               ph.close, ph.date
+        FROM symbol s
+        LEFT JOIN LATERAL (
+            SELECT close, date FROM price_history
+            WHERE symbol_id = s.id ORDER BY date DESC LIMIT 1
+        ) ph ON true
+        ORDER BY s.ticker
+    """))
+    return [
+        {
+            "ticker": row.ticker,
+            "name": row.name,
+            "type": row.type,
+            "sector": row.sector,
+            "leverage_factor": float(row.leverage_factor),
+            "latest_close": float(row.close) if row.close else None,
+            "latest_date": row.date.isoformat() if row.date else None,
+        }
+        for row in result.fetchall()
+    ]
+
+
+@router.get("/{ticker}/history-db")
+async def get_history_db(
+    ticker: str,
+    days: int = Query(default=365, ge=1, le=1825),
+    session: AsyncSession = Depends(get_session),
+):
+    """Daily OHLCV bars from the database."""
+    cutoff = date.today() - timedelta(days=days)
+    result = await session.execute(
+        text("""
+            SELECT ph.date, ph.open, ph.high, ph.low, ph.close, ph.volume
+            FROM price_history ph
+            JOIN symbol s ON s.id = ph.symbol_id
+            WHERE s.ticker = :ticker AND ph.date >= :cutoff
+            ORDER BY ph.date
+        """),
+        {"ticker": ticker.upper(), "cutoff": cutoff},
+    )
+    rows = result.fetchall()
+    if not rows:
+        raise HTTPException(status_code=404, detail=f"No DB price data for: {ticker}")
+    return [
+        {
+            "date": row.date.isoformat(),
+            "open": float(row.open),
+            "high": float(row.high),
+            "low": float(row.low),
+            "close": float(row.close),
+            "volume": row.volume,
+        }
+        for row in rows
+    ]
 
 
 @router.get("/search")
