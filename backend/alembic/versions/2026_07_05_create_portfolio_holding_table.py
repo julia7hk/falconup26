@@ -8,7 +8,6 @@ Create Date: 2026-07-05 14:34:15.753766
 from typing import Sequence, Union
 
 from alembic import op
-import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
@@ -19,16 +18,17 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        "portfolio_holding",
-        sa.Column("id", sa.Integer, primary_key=True),
-        sa.Column("symbol_id", sa.Integer, sa.ForeignKey("symbol.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("shares", sa.Numeric, nullable=False),
-        sa.Column("avg_cost", sa.Numeric, nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-    )
+    op.execute("""
+        CREATE TABLE portfolio_holding (
+            id serial PRIMARY KEY,
+            symbol_id integer NOT NULL REFERENCES symbol(id) ON DELETE CASCADE,
+            shares numeric NOT NULL,
+            avg_cost numeric NOT NULL,
+            created_at timestamptz NOT NULL DEFAULT now(),
+            updated_at timestamptz NOT NULL DEFAULT now()
+        )
+    """)
 
 
 def downgrade() -> None:
-    op.drop_table("portfolio_holding")
+    op.execute("DROP TABLE portfolio_holding")

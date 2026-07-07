@@ -23,8 +23,10 @@ and evidence to put money into it."
 - `backend/` — FastAPI + Python 3.13 (API, indicator engine, portfolio risk engine, LLM explainer)
 - `backend/market/` — market data abstraction layer (provider protocol, yfinance impl, FRED macro data, Redis cache)
 - `backend/routers/` — FastAPI route handlers (`symbols.py`, `macro.py`)
+- `backend/db.py` — SQLAlchemy async engine + session factory (asyncpg driver). Defers engine creation if `DATABASE_URL` is not set (safe for CI import).
+- `backend/scripts/` — one-off CLI scripts (`seed.py`, `backfill.py`)
 - `backend/llm/` — structured LLM layer (prompts/, context.py, validator.py, cache.py, client.py) — not yet implemented
-- `frontend/` — Next.js 16 (App Router) + React 19 + TypeScript + Tailwind 4 — still boilerplate
+- `frontend/` — Next.js 16 (App Router) + React 19 + TypeScript + Tailwind 4. Symbol catalog browser, sparkline price charts, symbol lookup, macro snapshot.
 - `ops/` — Dockerfiles, Compose (`compose.build.yaml` for local dev, `compose.yaml` for production), nginx config
 - `docs/` — Features, milestones
 - `kkulgag/` — Sibling project (Korean bulletin board aggregator), separate git repo on nc01 (not oc40). See `kkulgag/CLAUDE.md`.
@@ -57,9 +59,14 @@ npm run lint                                      # ESLint
 ```bash
 uv run alembic revision -m "add foo table"        # new migration (hand-authored)
 uv run alembic upgrade head                       # apply migrations
+uv run alembic current                            # check current migration state
+uv run python -m scripts.seed                     # seed symbol table (16 symbols, idempotent)
+uv run python -m scripts.backfill                 # backfill 5 years of price + macro history from yfinance/FRED
 ```
 
 Never use `alembic revision --autogenerate` — Alembic migrations are the source of truth, ORM models are downstream.
+
+Migrations use raw SQL (`op.execute("CREATE TABLE ...")`) — not SQLAlchemy API (`op.create_table(sa.Column(...))`).
 
 ### Docker (from `ops/`)
 
@@ -74,11 +81,29 @@ docker compose --env-file ../.env up -d            # start from registry images
 docker compose --env-file ../.env down             # stop all services
 ```
 
+### Deploy to oc40
+
+After merging to main:
+
+```bash
+ssh ubuntu@oc40
+cd ~/_proj/falconup26
+git pull
+cd backend
+# Bare-metal scripts need localhost, not Docker bridge IP
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/falconup uv run alembic upgrade head
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/falconup uv run python -m scripts.seed
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/falconup uv run python -m scripts.backfill
+cd ../ops
+docker compose -f compose.build.yaml down
+docker compose -f compose.build.yaml up --build -d
+```
+
 ## Stack
 
 - **Backend:** FastAPI in `backend/`, managed by `uv` (Python 3.13)
 - **Frontend:** Next.js 16 (App Router, Turbopack) in `frontend/`, React 19, Tailwind 4
-- **DB:** Postgres 16 (hosted on oc40, not in Docker). Schema owned by Alembic migrations (hand-authored). SQLAlchemy ORM. No migrations written yet.
+- **DB:** Postgres 16 (hosted on oc40, not in Docker). Schema owned by Alembic migrations (hand-authored). 4 tables: `symbol`, `portfolio_holding`, `price_history`, `macro_history`. No ORM models — queries use raw SQL via `text()`.
 - **Cache:** Redis (hosted on oc40, not in Docker). Used by `market/cache.py` for market data caching. `REDIS_URL` in `.env`. Tests use `fakeredis` (no running Redis needed).
 - **Reverse proxy:** Nginx in Docker (`ops/nginx/conf.d/falconup.conf`). Path-based routing on `falconup.julia7hk.com`: `/api/*` → backend, everything else → Next.js. Only nginx exposes a host port (`${WEB_PORT}:80`); frontend and backend are internal to the Docker network.
 - **TLS:** Cloudflare (edge termination). Domain `falconup.julia7hk.com` is proxied through Cloudflare; nginx listens on port 80. SSL mode: Full.
@@ -113,6 +138,41 @@ FredProvider (separate)          → FRED API for macro data (fed funds, VIX, tr
 - `cache.py` — `TTLCache` backed by Redis with pickle serialization.
 - `models.py` — `Quote`, `OHLCV`, `SectorInfo` dataclasses (frozen, slotted).
 
+### Database Layer
+
+```
+Alembic migrations (source of truth)  → define schema
+db.py                                 → async engine + session factory
+routers/*.py                          → query via text() SQL, session from get_session() dependency
+scripts/seed.py                       → populate symbol table (16 symbols, idempotent via ON CONFLICT)
+scripts/backfill.py                   → pull 5yr OHLCV + FRED history into Postgres (idempotent)
+```
+
+Tables:
+- `symbol` — ticker (unique), name, type (etf/stock), sector, industry, leverage_factor, timestamps
+- `portfolio_holding` — symbol_id FK, shares, avg_cost, timestamps
+- `price_history` — symbol_id FK, date, OHLCV, volume. Indexed + unique on (symbol_id, date)
+- `macro_history` — series name, date, value. Indexed + unique on (series, date)
+
+Future tables (deferred to their respective milestones):
+- `indicator_snapshot` — M4a
+- `portfolio_risk_snapshot` — M4b
+- `llm_analysis_cache` — M5b
+
+### Data Flow
+
+```
+External APIs (yfinance, FRED)
+  → backfill.py (one-time seed into Postgres)
+  → Postgres (source of truth for historical data)
+  → /api/symbols/{ticker}/history-db (serves from DB)
+
+External APIs (yfinance, FRED)
+  → Redis cache (short TTL, ephemeral)
+  → /api/symbols/{ticker}/quote (live quotes, not stored in DB)
+  → /api/macro/snapshot (live macro data)
+```
+
 ## Ports
 
 - Port 80 (nginx → exposed to host; proxies to frontend and backend)
@@ -123,9 +183,12 @@ FredProvider (separate)          → FRED API for macro data (fed funds, VIX, tr
 
 - **Next.js 16 breaking changes:** This project uses Next.js 16, which has breaking changes from earlier versions. Read `node_modules/next/dist/docs/` before writing frontend code. Do not assume APIs or conventions match Next.js 14/15.
 - **No containerized Postgres or Redis:** Both run on the host (oc40), not in Docker. Do not add `db` or `redis` services to Docker Compose. The backend container reaches them via the Docker bridge gateway IP.
-- **PGHOST in Docker:** `.env` has `PGHOST=localhost` which works for bare-metal dev but not inside containers. On Mac (Docker Desktop) set `PGHOST=host.docker.internal`. On oc40 (Linux) set `PGHOST=172.17.0.1` (Docker bridge gateway). Postgres `pg_hba.conf` and `listen_addresses` must allow connections from `172.16.0.0/12`.
-- **REDIS_URL in Docker:** Same issue as PGHOST. `.env` has `REDIS_URL=redis://localhost:6379/0` which works for bare-metal dev. On oc40 set `REDIS_URL=redis://172.17.0.1:6379/0`. Redis `bind` config must include `172.17.0.1` (or `0.0.0.0`) and `protected-mode` should be `no` (or set a password).
+- **PGHOST in Docker vs bare metal:** oc40's `.env` has `PGHOST=172.17.0.1` (Docker bridge gateway) for containers. Bare-metal commands (alembic, seed, backfill) need `localhost` — override with `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/falconup`. On Mac (Docker Desktop) use `PGHOST=host.docker.internal`.
+- **REDIS_URL in Docker:** Same issue as PGHOST. On oc40: `REDIS_URL=redis://172.17.0.1:6379/0`. Redis `bind` config must include `172.17.0.1` (or `0.0.0.0`) and `protected-mode` should be `no` (or set a password).
 - **NEXT_PUBLIC_* vars are build-time:** Next.js inlines `NEXT_PUBLIC_*` env vars into the JS bundle during `npm run build`. They must be passed as Docker build args (`ARG`/`ENV` in Dockerfile), not just runtime env vars. Changing them requires a rebuild.
+- **db.py import safety:** `db.py` defers engine creation when `DATABASE_URL` is missing. This allows CI tests to import the app without a database. The error only fires at runtime when `get_session()` is called.
+- **FRED date strings:** `FredProvider.get_series_history()` returns dates as ISO strings, not `date` objects. When inserting into Postgres via asyncpg, convert with `date.fromisoformat()` first.
+- **React component definitions:** Do not define React components inside other components — Next.js 16 ESLint will flag this and it causes state reset on every render. Define them at module scope.
 
 ## Self-Maintenance Rule
 
