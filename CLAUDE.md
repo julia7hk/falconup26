@@ -22,7 +22,8 @@ and evidence to put money into it."
 
 - `backend/` — FastAPI + Python 3.13 (API, indicator engine, portfolio risk engine, LLM explainer)
 - `backend/market/` — market data abstraction layer (provider protocol, yfinance impl, FRED macro data, Redis cache)
-- `backend/routers/` — FastAPI route handlers (`symbols.py`, `macro.py`)
+- `backend/indicators/` — per-symbol indicator engine (models.py, math.py, composite.py). Pure functions, no DB dependency.
+- `backend/routers/` — FastAPI route handlers (`symbols.py`, `macro.py`, `indicators.py`)
 - `backend/db.py` — SQLAlchemy async engine + session factory (asyncpg driver). Defers engine creation if `DATABASE_URL` is not set (safe for CI import).
 - `backend/scripts/` — one-off CLI scripts (`seed.py`, `backfill.py`)
 - `backend/llm/` — structured LLM layer (prompts/, context.py, validator.py, cache.py, client.py) — not yet implemented
@@ -155,9 +156,26 @@ Tables:
 - `macro_history` — series name, date, value. Indexed + unique on (series, date)
 
 Future tables (deferred to their respective milestones):
-- `indicator_snapshot` — M4a
-- `portfolio_risk_snapshot` — M4b
-- `llm_analysis_cache` — M5b
+- `indicator_snapshot` — M4 (deferred to M9 data pipeline)
+- `portfolio_risk_snapshot` — M5
+- `llm_analysis_cache` — M6
+
+### Indicator Engine (`backend/indicators/`)
+
+```
+models.py      → frozen dataclasses for each indicator result (RSIResult, MACDResult, etc.)
+math.py        → 7 pure functions (rsi, macd, bollinger_width, sma_crossover, atr, beta, sharpe_ratio)
+               → helpers: _ema, _sma
+composite.py   → normalize_signal (each indicator → [-1,+1])
+               → composite_score (weighted sum → Buy/Hold/Sell + confidence)
+```
+
+- All math functions take `list[float]` and return a result dataclass. No DB, no side effects.
+- Beta requires SPY closes alongside the target symbol (pre-aligned by date via SQL JOIN).
+- Sharpe uses the fed funds rate from `macro_history` as the risk-free rate.
+- Composite weights: RSI 0.15, MACD 0.15, Bollinger 0.10, SMA 0.15, ATR 0.10, Beta 0.15, Sharpe 0.20.
+- Missing indicators (insufficient data) are excluded and remaining weights re-normalized.
+- Endpoint: `GET /api/symbols/{ticker}/indicators` computes on-the-fly (no caching/persistence yet).
 
 ### Data Flow
 
@@ -171,6 +189,10 @@ External APIs (yfinance, FRED)
   → Redis cache (short TTL, ephemeral)
   → /api/symbols/{ticker}/quote (live quotes, not stored in DB)
   → /api/macro/snapshot (live macro data)
+
+Postgres (price_history + macro_history)
+  → indicators/math.py (pure computation, on-the-fly)
+  → /api/symbols/{ticker}/indicators (all 7 indicators + composite signal)
 ```
 
 ## Ports
