@@ -120,17 +120,17 @@ def composite_score(
 
     score = max(-1.0, min(1.0, score))
 
-    # Signal classification
-    if score > 0.25:
+    # Signal classification — lower thresholds so moderate agreement triggers
+    if score > 0.15:
         signal = "buy"
-    elif score < -0.25:
+    elif score < -0.15:
         signal = "sell"
     else:
         signal = "hold"
 
-    # Confidence: based on score magnitude and indicator agreement
+    # Confidence: weight agreement more heavily than raw score magnitude
     agreement = _indicator_agreement(contributions)
-    confidence = min(1.0, (abs(score) * 0.7 + agreement * 0.3))
+    confidence = min(1.0, (abs(score) * 0.4 + agreement * 0.6))
 
     return CompositeResult(
         score=round(score, 4),
