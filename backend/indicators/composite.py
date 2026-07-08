@@ -70,13 +70,13 @@ def normalize_signal(name: str, result: object) -> float:
         return _clamp(gap * 10)  # 1% gap -> 0.1 signal
 
     if isinstance(result, ATRResult):
-        # Smooth: ATR% 0.5 -> +0.8 (very stable),
+        # Smooth: ATR% 0.5 -> +0.6 (very stable),
         #         ATR% 2.0 -> 0 (average),
-        #         ATR% 5.0 -> -1.0 (very volatile)
+        #         ATR% 4.5 -> -0.8 (very volatile)
         return _clamp((2.0 - result.atr_percent) / 2.0 * 0.8)
 
     if isinstance(result, BetaResult):
-        # Smooth: beta 0.5 -> +0.8 (defensive),
+        # Smooth: beta 0.5 -> +0.5 (defensive),
         #         beta 1.0 -> 0 (market),
         #         beta 2.0 -> -1.0 (very volatile)
         return _clamp((1.0 - result.value) * 1.0)

@@ -203,7 +203,7 @@ function CompositeCard({ indicators }: { indicators: IndicatorData }) {
           <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
             This signal combines all 7 indicators into a single recommendation using a weighted average.
             Each indicator is scored from -1 (bearish) to +1 (bullish), then multiplied by its weight.
-            The composite score ({composite.score > 0 ? "+" : ""}{composite.score.toFixed(3)}) is the sum.
+            The composite score ({composite.score > 0 ? "+" : ""}{composite.score.toFixed(3)}) is the weighted average.
             {composite.signal === "buy"
               ? " A score above +0.15 triggers a Buy signal."
               : composite.signal === "sell"
