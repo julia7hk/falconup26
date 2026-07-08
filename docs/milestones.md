@@ -62,18 +62,18 @@ DB table exists (`portfolio_holding` from M3). This milestone adds the API + fro
 
 ### Backend — `backend/routers/portfolio.py`
 
-- [ ] `POST /api/portfolio/holdings` — add holding (symbol ticker + shares + avg cost). Look up symbol_id, 404 if not in DB
-- [ ] `GET /api/portfolio` — all holdings with current price, market value, P&L per position, total portfolio value
-- [ ] `PUT /api/portfolio/holdings/{id}` — update shares or avg cost
-- [ ] `DELETE /api/portfolio/holdings/{id}` — remove holding
+- [x] `POST /api/portfolio/holdings` — add holding (symbol ticker + shares + avg cost). Look up symbol_id, 404 if not in DB
+- [x] `GET /api/portfolio` — all holdings with current price, market value, P&L per position, total portfolio value
+- [x] `PUT /api/portfolio/holdings/{id}` — update shares or avg cost
+- [x] `DELETE /api/portfolio/holdings/{id}` — remove holding
 
 ### Frontend — holdings UI
 
-- [ ] Add holding form — symbol picker (from catalog or search) + shares + avg cost
-- [ ] Holdings list — ticker, shares, avg cost, current price, market value, P&L, gain/loss %
-- [ ] Portfolio summary bar — total value, total P&L, day change
-- [ ] Buy/Hold/Sell badge per holding (from existing indicators endpoint)
-- [ ] Empty state + onboarding — prompt to add first holding, suggest QQQ/TQQQ/SOXL as examples
+- [x] Add holding form — symbol picker (from catalog or search) + shares + avg cost
+- [x] Holdings list — ticker, shares, avg cost, current price, market value, P&L, gain/loss %
+- [x] Portfolio summary bar — total value, total P&L, day change
+- [x] Buy/Hold/Sell badge per holding (from existing indicators endpoint)
+- [x] Empty state + onboarding — prompt to add first holding, suggest QQQ/TQQQ/SOXL as examples
 
 ## Milestone 6: Portfolio Risk Engine
 

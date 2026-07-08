@@ -280,6 +280,7 @@ export default function Home() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editShares, setEditShares] = useState("");
   const [editAvgCost, setEditAvgCost] = useState("");
+  const [holdingSignals, setHoldingSignals] = useState<Record<string, { signal: string; confidence: number }>>({});
 
   useEffect(() => {
     fetch("/api/symbols/catalog")
@@ -292,7 +293,28 @@ export default function Home() {
   async function fetchPortfolio() {
     try {
       const res = await fetch("/api/portfolio");
-      if (res.ok) setPortfolio(await res.json());
+      if (!res.ok) return;
+      const data: Portfolio = await res.json();
+      setPortfolio(data);
+
+      // Fetch indicators for each holding (fire-and-forget, non-blocking)
+      const tickers = data.holdings.map((h) => h.ticker);
+      const signals: Record<string, { signal: string; confidence: number }> = {};
+      await Promise.all(
+        tickers.map(async (ticker) => {
+          try {
+            const r = await fetch(`/api/symbols/${ticker}/indicators`);
+            if (r.ok) {
+              const ind: IndicatorData = await r.json();
+              signals[ticker] = {
+                signal: ind.composite.signal,
+                confidence: ind.composite.confidence,
+              };
+            }
+          } catch {}
+        }),
+      );
+      setHoldingSignals(signals);
     } catch {}
   }
 
@@ -603,6 +625,17 @@ export default function Home() {
                             {h.leverage_factor !== 1 && (
                               <span className="rounded bg-amber-100 px-1 text-xs font-medium text-amber-700 dark:bg-amber-900 dark:text-amber-300">
                                 {h.leverage_factor}x
+                              </span>
+                            )}
+                            {holdingSignals[h.ticker] && (
+                              <span className={`rounded px-1.5 py-0.5 text-xs font-semibold uppercase ${
+                                holdingSignals[h.ticker].signal === "buy"
+                                  ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
+                                  : holdingSignals[h.ticker].signal === "sell"
+                                    ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
+                                    : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                              }`}>
+                                {holdingSignals[h.ticker].signal}
                               </span>
                             )}
                           </div>
