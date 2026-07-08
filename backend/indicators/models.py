@@ -76,3 +76,4 @@ class CompositeResult:
     signal: str  # "buy", "hold", "sell"
     confidence: float  # 0 to 1
     contributions: dict[str, float]  # per-indicator weighted contribution
+    directions: dict[str, str]  # per-indicator direction: "bullish", "bearish", "neutral"

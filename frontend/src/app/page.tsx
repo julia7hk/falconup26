@@ -71,6 +71,7 @@ type IndicatorData = {
     signal: string;
     confidence: number;
     contributions: Record<string, number>;
+    directions: Record<string, string>;
   };
 };
 
@@ -148,24 +149,13 @@ function IndicatorCard({
   );
 }
 
-function getIndicatorSignal(name: string, ind: IndicatorData["indicators"]): string {
-  if (name === "rsi" && ind.rsi) return ind.rsi.signal === "oversold" ? "bullish" : ind.rsi.signal === "overbought" ? "bearish" : "neutral";
-  if (name === "macd" && ind.macd) return ind.macd.signal;
-  if (name === "bollinger" && ind.bollinger) return ind.bollinger.signal === "low_volatility" ? "bullish" : ind.bollinger.signal === "high_volatility" ? "bearish" : "neutral";
-  if (name === "sma_crossover" && ind.sma_crossover) return ind.sma_crossover.crossover_type === "golden_cross" ? "bullish" : ind.sma_crossover.crossover_type === "death_cross" ? "bearish" : "neutral";
-  if (name === "atr") return "neutral";
-  if (name === "beta" && ind.beta) return ind.beta.value < 0.8 ? "bullish" : ind.beta.value > 1.5 ? "bearish" : "neutral";
-  if (name === "sharpe" && ind.sharpe) return ind.sharpe.value >= 1 ? "bullish" : ind.sharpe.value < 0 ? "bearish" : "neutral";
-  return "neutral";
-}
-
 function CompositeCard({ indicators }: { indicators: IndicatorData }) {
   const [expanded, setExpanded] = useState(false);
   const { composite } = indicators;
-  const signals = Object.keys(composite.contributions).map((name) => getIndicatorSignal(name, indicators.indicators));
-  const bullishCount = signals.filter((s) => s === "bullish").length;
-  const bearishCount = signals.filter((s) => s === "bearish").length;
-  const neutralCount = signals.filter((s) => s === "neutral").length;
+  const directions = Object.values(composite.directions);
+  const bullishCount = directions.filter((d) => d === "bullish").length;
+  const bearishCount = directions.filter((d) => d === "bearish").length;
+  const neutralCount = directions.filter((d) => d === "neutral").length;
 
   return (
     <div
@@ -482,7 +472,7 @@ export default function Home() {
                     <IndicatorCard
                       name="RSI (14)"
                       value={indicators.indicators.rsi.value.toFixed(1)}
-                      signal={indicators.indicators.rsi.signal}
+                      signal={indicators.composite.directions.rsi ?? "neutral"}
                       detail={
                         indicators.indicators.rsi.signal === "oversold"
                           ? "Below 30 — oversold, may bounce"
@@ -496,7 +486,7 @@ export default function Home() {
                     <IndicatorCard
                       name="MACD (12/26/9)"
                       value={indicators.indicators.macd.histogram.toFixed(4)}
-                      signal={indicators.indicators.macd.signal}
+                      signal={indicators.composite.directions.macd ?? "neutral"}
                       detail={`Line: ${indicators.indicators.macd.macd_line.toFixed(4)} · Signal: ${indicators.indicators.macd.signal_line.toFixed(4)}`}
                     />
                   )}
@@ -504,7 +494,7 @@ export default function Home() {
                     <IndicatorCard
                       name="Bollinger Width"
                       value={(indicators.indicators.bollinger.width * 100).toFixed(2) + "%"}
-                      signal={indicators.indicators.bollinger.signal}
+                      signal={indicators.composite.directions.bollinger ?? "neutral"}
                       detail={`Upper: $${indicators.indicators.bollinger.upper.toFixed(2)} · Lower: $${indicators.indicators.bollinger.lower.toFixed(2)}`}
                     />
                   )}
@@ -512,13 +502,7 @@ export default function Home() {
                     <IndicatorCard
                       name="SMA 50/200"
                       value={indicators.indicators.sma_crossover.crossover_type.replace("_", " ")}
-                      signal={
-                        indicators.indicators.sma_crossover.crossover_type === "golden_cross"
-                          ? "bullish"
-                          : indicators.indicators.sma_crossover.crossover_type === "death_cross"
-                            ? "bearish"
-                            : "neutral"
-                      }
+                      signal={indicators.composite.directions.sma_crossover ?? "neutral"}
                       detail={`50d: $${indicators.indicators.sma_crossover.sma_50.toFixed(2)} · 200d: $${indicators.indicators.sma_crossover.sma_200.toFixed(2)}${indicators.indicators.sma_crossover.days_since_cross !== null ? ` · ${indicators.indicators.sma_crossover.days_since_cross}d ago` : ""}`}
                     />
                   )}
@@ -526,7 +510,7 @@ export default function Home() {
                     <IndicatorCard
                       name="ATR (14)"
                       value={"$" + indicators.indicators.atr.value.toFixed(2)}
-                      signal="neutral"
+                      signal={indicators.composite.directions.atr ?? "neutral"}
                       detail={`${indicators.indicators.atr.atr_percent.toFixed(2)}% of price — daily volatility`}
                     />
                   )}
@@ -534,13 +518,7 @@ export default function Home() {
                     <IndicatorCard
                       name="Beta vs S&P 500"
                       value={indicators.indicators.beta.value.toFixed(2)}
-                      signal={
-                        indicators.indicators.beta.value < 0.8
-                          ? "bullish"
-                          : indicators.indicators.beta.value > 1.5
-                            ? "bearish"
-                            : "neutral"
-                      }
+                      signal={indicators.composite.directions.beta ?? "neutral"}
                       detail={indicators.indicators.beta.interpretation}
                     />
                   )}
@@ -548,13 +526,7 @@ export default function Home() {
                     <IndicatorCard
                       name="Sharpe Ratio"
                       value={indicators.indicators.sharpe.value.toFixed(2)}
-                      signal={
-                        indicators.indicators.sharpe.value >= 1
-                          ? "bullish"
-                          : indicators.indicators.sharpe.value < 0
-                            ? "bearish"
-                            : "neutral"
-                      }
+                      signal={indicators.composite.directions.sharpe ?? "neutral"}
                       detail={`${indicators.indicators.sharpe.interpretation} (rf: ${indicators.indicators.sharpe.risk_free_rate}%)`}
                     />
                   )}

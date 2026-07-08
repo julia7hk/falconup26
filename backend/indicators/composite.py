@@ -98,6 +98,7 @@ def composite_score(
     re-normalized.
     """
     contributions: dict[str, float] = {}
+    directions: dict[str, str] = {}
     total_weight = 0.0
     weighted_sum = 0.0
 
@@ -107,6 +108,12 @@ def composite_score(
         normalized = normalize_signal(name, results[name])
         contribution = normalized * weight
         contributions[name] = round(contribution, 4)
+        if normalized > 0.05:
+            directions[name] = "bullish"
+        elif normalized < -0.05:
+            directions[name] = "bearish"
+        else:
+            directions[name] = "neutral"
         weighted_sum += contribution
         total_weight += weight
 
@@ -137,6 +144,7 @@ def composite_score(
         signal=signal,
         confidence=round(confidence, 2),
         contributions=contributions,
+        directions=directions,
     )
 
 
