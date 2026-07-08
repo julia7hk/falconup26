@@ -160,6 +160,7 @@ export default function Home() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [indicators, setIndicators] = useState<IndicatorData | null>(null);
   const [indicatorsLoading, setIndicatorsLoading] = useState(false);
+  const [indicatorsError, setIndicatorsError] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -176,6 +177,7 @@ export default function Home() {
     if (isNewTicker) {
       setIndicators(null);
       setIndicatorsLoading(true);
+      setIndicatorsError("");
     }
     try {
       const fetches: Promise<Response>[] = [
@@ -186,8 +188,15 @@ export default function Home() {
       }
       const results = await Promise.all(fetches);
       if (results[0].ok) setHistory(await results[0].json());
-      if (isNewTicker && results[1]?.ok) setIndicators(await results[1].json());
+      if (isNewTicker) {
+        if (results[1]?.ok) {
+          setIndicators(await results[1].json());
+        } else {
+          setIndicatorsError(`Could not load indicators (${results[1]?.status ?? "network error"})`);
+        }
+      }
     } catch {
+      if (isNewTicker) setIndicatorsError("Failed to fetch indicators");
     } finally {
       if (isNewTicker) setIndicatorsLoading(false);
     }
@@ -364,6 +373,10 @@ export default function Home() {
 
             {indicatorsLoading && (
               <p className="text-sm text-zinc-400">Loading indicators...</p>
+            )}
+
+            {indicatorsError && (
+              <p className="text-sm text-red-600 dark:text-red-400">{indicatorsError}</p>
             )}
 
             {indicators && (
