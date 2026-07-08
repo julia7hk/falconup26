@@ -75,6 +75,31 @@ type IndicatorData = {
   };
 };
 
+type Holding = {
+  id: number;
+  ticker: string;
+  name: string;
+  type: string;
+  sector: string;
+  leverage_factor: number;
+  shares: number;
+  avg_cost: number;
+  cost_basis: number;
+  price: number | null;
+  change: number | null;
+  change_percent: number | null;
+  market_value: number | null;
+  pnl: number | null;
+  pnl_percent: number | null;
+};
+
+type Portfolio = {
+  holdings: Holding[];
+  total_value: number;
+  total_cost: number;
+  total_pnl: number;
+};
+
 function Sparkline({ data }: { data: PriceBar[] }) {
   if (data.length < 2) return null;
   const closes = data.map((d) => d.close);
@@ -245,13 +270,85 @@ export default function Home() {
   const [indicatorsError, setIndicatorsError] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addTicker, setAddTicker] = useState("");
+  const [addShares, setAddShares] = useState("");
+  const [addAvgCost, setAddAvgCost] = useState("");
+  const [addError, setAddError] = useState("");
+  const [addLoading, setAddLoading] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editShares, setEditShares] = useState("");
+  const [editAvgCost, setEditAvgCost] = useState("");
 
   useEffect(() => {
     fetch("/api/symbols/catalog")
       .then((res) => res.json())
       .then(setCatalog)
       .catch(() => {});
+    fetchPortfolio();
   }, []);
+
+  async function fetchPortfolio() {
+    try {
+      const res = await fetch("/api/portfolio");
+      if (res.ok) setPortfolio(await res.json());
+    } catch {}
+  }
+
+  async function addHolding() {
+    if (!addTicker.trim() || !addShares || !addAvgCost) return;
+    setAddError("");
+    setAddLoading(true);
+    try {
+      const res = await fetch("/api/portfolio/holdings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticker: addTicker.toUpperCase(),
+          shares: parseFloat(addShares),
+          avg_cost: parseFloat(addAvgCost),
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || `Failed (${res.status})`);
+      }
+      setAddTicker("");
+      setAddShares("");
+      setAddAvgCost("");
+      setShowAddForm(false);
+      await fetchPortfolio();
+    } catch (e) {
+      setAddError(e instanceof Error ? e.message : "Failed to add holding");
+    } finally {
+      setAddLoading(false);
+    }
+  }
+
+  async function updateHolding(id: number) {
+    try {
+      const body: Record<string, number> = {};
+      if (editShares) body.shares = parseFloat(editShares);
+      if (editAvgCost) body.avg_cost = parseFloat(editAvgCost);
+      const res = await fetch(`/api/portfolio/holdings/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        setEditingId(null);
+        await fetchPortfolio();
+      }
+    } catch {}
+  }
+
+  async function deleteHolding(id: number) {
+    try {
+      const res = await fetch(`/api/portfolio/holdings/${id}`, { method: "DELETE" });
+      if (res.ok) await fetchPortfolio();
+    } catch {}
+  }
 
   async function selectSymbol(ticker: string, days = historyDays) {
     const isNewTicker = ticker !== selectedTicker;
@@ -335,6 +432,259 @@ export default function Home() {
         <h1 className="text-4xl font-bold tracking-tight dark:text-white">
           FalconUp
         </h1>
+
+        {/* Portfolio */}
+        <section className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold dark:text-zinc-200">
+              My Portfolio
+              {portfolio && portfolio.holdings.length > 0 && (
+                <span className="ml-2 text-base font-normal text-zinc-400">
+                  {portfolio.holdings.length} holding{portfolio.holdings.length !== 1 ? "s" : ""}
+                </span>
+              )}
+            </h2>
+            <button
+              onClick={() => setShowAddForm(!showAddForm)}
+              className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+            >
+              {showAddForm ? "Cancel" : "+ Add Holding"}
+            </button>
+          </div>
+
+          {/* Add Holding Form */}
+          {showAddForm && (
+            <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <div className="flex-1">
+                  <label className="mb-1 block text-sm text-zinc-500 dark:text-zinc-400">Symbol</label>
+                  <input
+                    type="text"
+                    value={addTicker}
+                    onChange={(e) => setAddTicker(e.target.value.toUpperCase())}
+                    placeholder="e.g. QQQ"
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="mb-1 block text-sm text-zinc-500 dark:text-zinc-400">Shares</label>
+                  <input
+                    type="number"
+                    value={addShares}
+                    onChange={(e) => setAddShares(e.target.value)}
+                    placeholder="10"
+                    min="0"
+                    step="any"
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="mb-1 block text-sm text-zinc-500 dark:text-zinc-400">Avg Cost ($)</label>
+                  <input
+                    type="number"
+                    value={addAvgCost}
+                    onChange={(e) => setAddAvgCost(e.target.value)}
+                    placeholder="480.00"
+                    min="0"
+                    step="any"
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                  />
+                </div>
+                <button
+                  onClick={addHolding}
+                  disabled={addLoading}
+                  className="rounded-lg bg-zinc-900 px-5 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+                >
+                  {addLoading ? "Adding..." : "Add"}
+                </button>
+              </div>
+              {addError && (
+                <p className="mt-2 text-sm text-red-600 dark:text-red-400">{addError}</p>
+              )}
+              <p className="mt-2 text-xs text-zinc-400">
+                Symbol must be in the database. Try: QQQ, TQQQ, SOXL, SPY, AAPL, MSFT, NVDA, GOOGL, AMZN, META, TSLA
+              </p>
+            </div>
+          )}
+
+          {/* Portfolio Summary */}
+          {portfolio && portfolio.holdings.length > 0 && (
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">Total Value</p>
+                <p className="font-mono text-xl font-semibold dark:text-white">
+                  ${portfolio.total_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">Total Cost</p>
+                <p className="font-mono text-xl font-semibold dark:text-white">
+                  ${portfolio.total_cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">Total P&L</p>
+                <p className={`font-mono text-xl font-semibold ${
+                  portfolio.total_pnl >= 0
+                    ? "text-green-600 dark:text-green-400"
+                    : "text-red-600 dark:text-red-400"
+                }`}>
+                  {portfolio.total_pnl >= 0 ? "+" : ""}
+                  ${portfolio.total_pnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Holdings List */}
+          {portfolio && portfolio.holdings.length > 0 ? (
+            <div className="flex flex-col gap-3">
+              {portfolio.holdings.map((h) => (
+                <div
+                  key={h.id}
+                  className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700"
+                >
+                  {editingId === h.id ? (
+                    /* Edit mode */
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                      <div>
+                        <p className="font-mono text-lg font-bold dark:text-white">{h.ticker}</p>
+                        <p className="text-sm text-zinc-400">{h.name}</p>
+                      </div>
+                      <div className="flex-1">
+                        <label className="mb-1 block text-xs text-zinc-400">Shares</label>
+                        <input
+                          type="number"
+                          value={editShares}
+                          onChange={(e) => setEditShares(e.target.value)}
+                          min="0"
+                          step="any"
+                          className="w-full rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="mb-1 block text-xs text-zinc-400">Avg Cost ($)</label>
+                        <input
+                          type="number"
+                          value={editAvgCost}
+                          onChange={(e) => setEditAvgCost(e.target.value)}
+                          min="0"
+                          step="any"
+                          className="w-full rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => updateHolding(h.id)}
+                          className="rounded bg-zinc-900 px-3 py-1 text-sm text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => setEditingId(null)}
+                          className="rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Display mode */
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div>
+                          <div className="flex items-baseline gap-2">
+                            <span
+                              className="cursor-pointer font-mono text-lg font-bold hover:text-blue-600 dark:text-white dark:hover:text-blue-400"
+                              onClick={() => selectSymbol(h.ticker)}
+                            >
+                              {h.ticker}
+                            </span>
+                            {h.leverage_factor !== 1 && (
+                              <span className="rounded bg-amber-100 px-1 text-xs font-medium text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                                {h.leverage_factor}x
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-zinc-400">{h.name}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-6">
+                        <div className="text-right">
+                          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                            {h.shares} shares @ ${h.avg_cost.toFixed(2)}
+                          </p>
+                          {h.price !== null && (
+                            <p className="font-mono text-base font-semibold dark:text-zinc-200">
+                              ${h.market_value!.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          {h.pnl !== null && (
+                            <>
+                              <p className={`font-mono text-base font-semibold ${
+                                h.pnl >= 0
+                                  ? "text-green-600 dark:text-green-400"
+                                  : "text-red-600 dark:text-red-400"
+                              }`}>
+                                {h.pnl >= 0 ? "+" : ""}${h.pnl.toFixed(2)}
+                              </p>
+                              <p className={`text-sm ${
+                                h.pnl_percent! >= 0
+                                  ? "text-green-600 dark:text-green-400"
+                                  : "text-red-600 dark:text-red-400"
+                              }`}>
+                                {h.pnl_percent! >= 0 ? "+" : ""}{h.pnl_percent!.toFixed(2)}%
+                              </p>
+                            </>
+                          )}
+                          {h.price === null && (
+                            <p className="text-sm text-zinc-400">Price unavailable</p>
+                          )}
+                        </div>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => {
+                              setEditingId(h.id);
+                              setEditShares(String(h.shares));
+                              setEditAvgCost(String(h.avg_cost));
+                            }}
+                            className="rounded border border-zinc-300 px-2 py-1 text-xs hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => deleteHolding(h.id)}
+                            className="rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : portfolio && portfolio.holdings.length === 0 ? (
+            /* Empty State */
+            <div className="rounded-lg border border-dashed border-zinc-300 p-8 text-center dark:border-zinc-700">
+              <p className="text-lg font-medium text-zinc-500 dark:text-zinc-400">
+                No holdings yet
+              </p>
+              <p className="mt-1 text-sm text-zinc-400">
+                Add your first holding to start tracking your portfolio.
+              </p>
+              <button
+                onClick={() => setShowAddForm(true)}
+                className="mt-4 rounded-lg bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+              >
+                + Add Your First Holding
+              </button>
+            </div>
+          ) : null}
+        </section>
 
         {/* Symbol Catalog */}
         <section className="flex flex-col gap-6">
