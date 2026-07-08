@@ -148,12 +148,24 @@ function IndicatorCard({
   );
 }
 
+function getIndicatorSignal(name: string, ind: IndicatorData["indicators"]): string {
+  if (name === "rsi" && ind.rsi) return ind.rsi.signal === "oversold" ? "bullish" : ind.rsi.signal === "overbought" ? "bearish" : "neutral";
+  if (name === "macd" && ind.macd) return ind.macd.signal;
+  if (name === "bollinger" && ind.bollinger) return ind.bollinger.signal === "low_volatility" ? "bullish" : ind.bollinger.signal === "high_volatility" ? "bearish" : "neutral";
+  if (name === "sma_crossover" && ind.sma_crossover) return ind.sma_crossover.crossover_type === "golden_cross" ? "bullish" : ind.sma_crossover.crossover_type === "death_cross" ? "bearish" : "neutral";
+  if (name === "atr") return "neutral";
+  if (name === "beta" && ind.beta) return ind.beta.value < 0.8 ? "bullish" : ind.beta.value > 1.5 ? "bearish" : "neutral";
+  if (name === "sharpe" && ind.sharpe) return ind.sharpe.value >= 1 ? "bullish" : ind.sharpe.value < 0 ? "bearish" : "neutral";
+  return "neutral";
+}
+
 function CompositeCard({ indicators }: { indicators: IndicatorData }) {
   const [expanded, setExpanded] = useState(false);
   const { composite } = indicators;
-  const bullishCount = Object.values(composite.contributions).filter((v) => v > 0).length;
-  const bearishCount = Object.values(composite.contributions).filter((v) => v < 0).length;
-  const neutralCount = Object.values(composite.contributions).filter((v) => v === 0).length;
+  const signals = Object.keys(composite.contributions).map((name) => getIndicatorSignal(name, indicators.indicators));
+  const bullishCount = signals.filter((s) => s === "bullish").length;
+  const bearishCount = signals.filter((s) => s === "bearish").length;
+  const neutralCount = signals.filter((s) => s === "neutral").length;
 
   return (
     <div
@@ -220,8 +232,7 @@ function CompositeCard({ indicators }: { indicators: IndicatorData }) {
                 : " it's high, meaning the indicators are mostly in agreement."}
           </p>
           <div className="mt-3 text-xs text-zinc-400">
-            <p className="font-medium mb-1">Weights: RSI 15% · MACD 15% · Bollinger 10% · SMA 15% · ATR 10% · Beta 15% · Sharpe 20%</p>
-            <p>Click any indicator card below to see what it measures and why it matters.</p>
+            <p className="font-medium">Weights: RSI 15% · MACD 15% · Bollinger 10% · SMA 15% · ATR 10% · Beta 15% · Sharpe 20%</p>
           </div>
         </div>
       )}
