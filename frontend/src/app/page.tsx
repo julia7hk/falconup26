@@ -126,24 +126,130 @@ function IndicatorCard({
   value,
   signal,
   detail,
+  explanation,
+  contribution,
 }: {
   name: string;
   value: string;
   signal: string;
   detail: string;
+  explanation: string;
+  contribution?: number;
 }) {
+  const [expanded, setExpanded] = useState(false);
   return (
-    <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-          {name}
+    <div className="rounded-lg border border-zinc-200 dark:border-zinc-700">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full p-3 text-left"
+      >
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+            {name}
+          </p>
+          <div className="flex items-center gap-1.5">
+            <SignalBadge signal={signal} />
+            <span className="text-xs text-zinc-400">{expanded ? "▲" : "▼"}</span>
+          </div>
+        </div>
+        <p className="mt-1 font-mono text-lg font-semibold dark:text-white">
+          {value}
         </p>
-        <SignalBadge signal={signal} />
-      </div>
-      <p className="mt-1 font-mono text-lg font-semibold dark:text-white">
-        {value}
-      </p>
-      <p className="mt-0.5 text-xs text-zinc-400">{detail}</p>
+        <p className="mt-0.5 text-xs text-zinc-400">{detail}</p>
+      </button>
+      {expanded && (
+        <div className="border-t border-zinc-100 px-3 pb-3 pt-2 dark:border-zinc-800">
+          <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
+            {explanation}
+          </p>
+          {contribution !== undefined && (
+            <p className="mt-2 text-xs text-zinc-400">
+              Composite contribution: {contribution > 0 ? "+" : ""}{contribution.toFixed(4)} (weighted)
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CompositeCard({ indicators }: { indicators: IndicatorData }) {
+  const [expanded, setExpanded] = useState(false);
+  const { composite } = indicators;
+  const bullishCount = Object.values(composite.contributions).filter((v) => v > 0).length;
+  const bearishCount = Object.values(composite.contributions).filter((v) => v < 0).length;
+  const neutralCount = Object.values(composite.contributions).filter((v) => v === 0).length;
+
+  return (
+    <div
+      className={`rounded-lg border ${
+        composite.signal === "buy"
+          ? "border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-950"
+          : composite.signal === "sell"
+            ? "border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-950"
+            : "border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900"
+      }`}
+    >
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full p-5 text-left"
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <span
+              className={`text-2xl font-bold uppercase ${
+                composite.signal === "buy"
+                  ? "text-green-700 dark:text-green-400"
+                  : composite.signal === "sell"
+                    ? "text-red-700 dark:text-red-400"
+                    : "text-zinc-600 dark:text-zinc-300"
+              }`}
+            >
+              {composite.signal}
+            </span>
+            <span className="ml-3 text-sm text-zinc-500 dark:text-zinc-400">
+              Confidence: {(composite.confidence * 100).toFixed(0)}%
+            </span>
+            <span className="ml-2 text-xs text-zinc-400">{expanded ? "▲" : "▼"}</span>
+          </div>
+          <div className="text-right">
+            <p className="font-mono text-lg font-semibold dark:text-zinc-200">
+              {composite.score > 0 ? "+" : ""}
+              {composite.score.toFixed(3)}
+            </p>
+            <p className="text-xs text-zinc-400">composite score</p>
+          </div>
+        </div>
+      </button>
+      {expanded && (
+        <div className="border-t border-inherit px-5 pb-5 pt-3">
+          <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
+            This signal combines all 7 indicators into a single recommendation using a weighted average.
+            Each indicator is scored from -1 (bearish) to +1 (bullish), then multiplied by its weight.
+            The composite score ({composite.score > 0 ? "+" : ""}{composite.score.toFixed(3)}) is the sum.
+            {composite.signal === "buy"
+              ? " A score above +0.15 triggers a Buy signal."
+              : composite.signal === "sell"
+                ? " A score below -0.15 triggers a Sell signal."
+                : " A score between -0.15 and +0.15 means Hold — no strong direction."}
+          </p>
+          <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
+            Right now, {bullishCount} indicator{bullishCount !== 1 ? "s" : ""} {bullishCount !== 1 ? "are" : "is"} bullish,
+            {" "}{bearishCount} {bearishCount !== 1 ? "are" : "is"} bearish
+            {neutralCount > 0 ? `, and ${neutralCount} ${neutralCount !== 1 ? "are" : "is"} neutral` : ""}.
+            {" "}Confidence ({(composite.confidence * 100).toFixed(0)}%) reflects how strongly the indicators agree —
+            {composite.confidence < 0.3
+              ? " it's low because the indicators are giving mixed signals. This means the data doesn't point clearly in one direction."
+              : composite.confidence < 0.6
+                ? " it's moderate, meaning most indicators lean the same way but there's some disagreement."
+                : " it's high, meaning the indicators are mostly in agreement."}
+          </p>
+          <div className="mt-3 text-xs text-zinc-400">
+            <p className="font-medium mb-1">Weights: RSI 15% · MACD 15% · Bollinger 10% · SMA 15% · ATR 10% · Beta 15% · Sharpe 20%</p>
+            <p>Click any indicator card below to see what it measures and why it matters.</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -382,43 +488,7 @@ export default function Home() {
             {indicators && (
               <div className="flex flex-col gap-4">
                 {/* Composite Signal */}
-                <div
-                  className={`rounded-lg border p-5 ${
-                    indicators.composite.signal === "buy"
-                      ? "border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-950"
-                      : indicators.composite.signal === "sell"
-                        ? "border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-950"
-                        : "border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span
-                        className={`text-2xl font-bold uppercase ${
-                          indicators.composite.signal === "buy"
-                            ? "text-green-700 dark:text-green-400"
-                            : indicators.composite.signal === "sell"
-                              ? "text-red-700 dark:text-red-400"
-                              : "text-zinc-600 dark:text-zinc-300"
-                        }`}
-                      >
-                        {indicators.composite.signal}
-                      </span>
-                      <span className="ml-3 text-sm text-zinc-500 dark:text-zinc-400">
-                        Confidence: {(indicators.composite.confidence * 100).toFixed(0)}%
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-mono text-lg font-semibold dark:text-zinc-200">
-                        {indicators.composite.score > 0 ? "+" : ""}
-                        {indicators.composite.score.toFixed(3)}
-                      </p>
-                      <p className="text-xs text-zinc-400">
-                        composite score
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                <CompositeCard indicators={indicators} />
 
                 {/* Indicator Cards */}
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -434,6 +504,8 @@ export default function Home() {
                             ? "Above 70 — overbought, may pull back"
                             : "Between 30-70 — neutral momentum"
                       }
+                      explanation={`RSI (Relative Strength Index) measures momentum — how fast the price has been going up or down over the last 14 days. It ranges from 0 to 100. Below 30 means the stock has been beaten down recently and might bounce back (\"oversold\"). Above 70 means it's been running hot and might pull back (\"overbought\"). At ${indicators.indicators.rsi.value.toFixed(1)}, ${indicators.indicators.rsi.signal === "oversold" ? "this suggests the recent sell-off may be overdone — a potential buying opportunity." : indicators.indicators.rsi.signal === "overbought" ? "this suggests the recent run-up may be overdone — consider taking profits or waiting." : "there's no strong momentum signal in either direction."}`}
+                      contribution={indicators.composite.contributions.rsi}
                     />
                   )}
                   {indicators.indicators.macd && (
@@ -442,6 +514,8 @@ export default function Home() {
                       value={indicators.indicators.macd.histogram.toFixed(4)}
                       signal={indicators.indicators.macd.signal}
                       detail={`Line: ${indicators.indicators.macd.macd_line.toFixed(4)} · Signal: ${indicators.indicators.macd.signal_line.toFixed(4)}`}
+                      explanation={`MACD compares a fast moving average (12-day) to a slow one (26-day) to detect if the trend is speeding up or slowing down. The histogram (${indicators.indicators.macd.histogram.toFixed(4)}) is the gap between the MACD line and its signal line. ${indicators.indicators.macd.signal === "bullish" ? "A positive histogram means upward momentum is increasing — the trend is strengthening." : indicators.indicators.macd.signal === "bearish" ? "A negative histogram means downward momentum is increasing — the trend is weakening." : "The histogram is near zero — the trend is flat or changing direction."}`}
+                      contribution={indicators.composite.contributions.macd}
                     />
                   )}
                   {indicators.indicators.bollinger && (
@@ -450,6 +524,8 @@ export default function Home() {
                       value={(indicators.indicators.bollinger.width * 100).toFixed(2) + "%"}
                       signal={indicators.indicators.bollinger.signal}
                       detail={`Upper: $${indicators.indicators.bollinger.upper.toFixed(2)} · Lower: $${indicators.indicators.bollinger.lower.toFixed(2)}`}
+                      explanation={`Bollinger Bands draw a range around the 20-day average price based on how much the price has been swinging. The width (${(indicators.indicators.bollinger.width * 100).toFixed(2)}%) tells you current volatility. ${indicators.indicators.bollinger.signal === "high_volatility" ? "Wide bands mean the price is swinging a lot — higher risk. Big moves (up or down) are happening." : indicators.indicators.bollinger.signal === "low_volatility" ? "Narrow bands mean the price is calm and stable. This often comes before a bigger move, but for now it signals lower risk." : "The bands are at a normal width — volatility is average."} The upper band ($${indicators.indicators.bollinger.upper.toFixed(2)}) and lower band ($${indicators.indicators.bollinger.lower.toFixed(2)}) show the expected trading range.`}
+                      contribution={indicators.composite.contributions.bollinger}
                     />
                   )}
                   {indicators.indicators.sma_crossover && (
@@ -464,6 +540,8 @@ export default function Home() {
                             : "neutral"
                       }
                       detail={`50d: $${indicators.indicators.sma_crossover.sma_50.toFixed(2)} · 200d: $${indicators.indicators.sma_crossover.sma_200.toFixed(2)}${indicators.indicators.sma_crossover.days_since_cross !== null ? ` · ${indicators.indicators.sma_crossover.days_since_cross}d ago` : ""}`}
+                      explanation={`This compares the 50-day average price ($${indicators.indicators.sma_crossover.sma_50.toFixed(2)}) to the 200-day average ($${indicators.indicators.sma_crossover.sma_200.toFixed(2)}). ${indicators.indicators.sma_crossover.crossover_type === "golden_cross" ? `When the 50-day crosses above the 200-day, it's called a "golden cross" — one of the most widely watched bullish signals on Wall Street. It happened ${indicators.indicators.sma_crossover.days_since_cross} trading days ago, suggesting the long-term trend turned upward.` : indicators.indicators.sma_crossover.crossover_type === "death_cross" ? `When the 50-day crosses below the 200-day, it's called a "death cross" — a bearish signal indicating the long-term trend has turned downward. It happened ${indicators.indicators.sma_crossover.days_since_cross} trading days ago.` : `No crossover has occurred recently. The 50-day is ${indicators.indicators.sma_crossover.sma_50 > indicators.indicators.sma_crossover.sma_200 ? "above" : "below"} the 200-day, suggesting a ${indicators.indicators.sma_crossover.sma_50 > indicators.indicators.sma_crossover.sma_200 ? "generally upward" : "generally downward"} trend.`}`}
+                      contribution={indicators.composite.contributions.sma_crossover}
                     />
                   )}
                   {indicators.indicators.atr && (
@@ -472,6 +550,8 @@ export default function Home() {
                       value={"$" + indicators.indicators.atr.value.toFixed(2)}
                       signal="neutral"
                       detail={`${indicators.indicators.atr.atr_percent.toFixed(2)}% of price — daily volatility`}
+                      explanation={`ATR (Average True Range) measures how much the price typically moves in a single day. At $${indicators.indicators.atr.value.toFixed(2)} (${indicators.indicators.atr.atr_percent.toFixed(2)}% of the current price), ${indicators.indicators.atr.atr_percent < 1.5 ? "this stock is relatively calm — small daily swings. Lower risk for holding." : indicators.indicators.atr.atr_percent < 3 ? "this stock has moderate daily movement. Normal volatility." : "this stock swings significantly each day. Higher risk — you could see large gains or losses on any given day."} This doesn't tell you direction (up or down), just how much movement to expect.`}
+                      contribution={indicators.composite.contributions.atr}
                     />
                   )}
                   {indicators.indicators.beta && (
@@ -486,6 +566,8 @@ export default function Home() {
                             : "neutral"
                       }
                       detail={indicators.indicators.beta.interpretation}
+                      explanation={`Beta measures how much this stock moves relative to the overall market (S&P 500). A beta of 1.0 means it moves exactly with the market. At ${indicators.indicators.beta.value.toFixed(2)}, ${indicators.indicators.beta.value < 0.8 ? "this moves less than the market — more defensive and stable. Good for conservative investors." : indicators.indicators.beta.value <= 1.2 ? "this moves roughly with the market — average risk." : indicators.indicators.beta.value <= 1.5 ? "this moves more than the market. When the market goes up 1%, this tends to go up ~${indicators.indicators.beta.value.toFixed(1)}%. But it drops harder too." : `this is significantly more volatile than the market. A 1% market move becomes ~${indicators.indicators.beta.value.toFixed(1)}% here. High reward potential but high risk — especially relevant for leveraged ETFs.`}`}
+                      contribution={indicators.composite.contributions.beta}
                     />
                   )}
                   {indicators.indicators.sharpe && (
@@ -500,6 +582,8 @@ export default function Home() {
                             : "neutral"
                       }
                       detail={`${indicators.indicators.sharpe.interpretation} (rf: ${indicators.indicators.sharpe.risk_free_rate}%)`}
+                      explanation={`The Sharpe ratio answers: "Am I being compensated for the risk I'm taking?" It compares returns to volatility, adjusted for the risk-free rate (${indicators.indicators.sharpe.risk_free_rate}% — what you'd earn in a savings account). At ${indicators.indicators.sharpe.value.toFixed(2)}, ${indicators.indicators.sharpe.value >= 2 ? "this has excellent risk-adjusted returns — strong gains relative to the ups and downs." : indicators.indicators.sharpe.value >= 1 ? "this has good risk-adjusted returns — you're being reasonably compensated for the volatility." : indicators.indicators.sharpe.value >= 0 ? "the returns are positive but not great relative to the risk. You might get similar returns with less volatility elsewhere." : "the returns are negative after adjusting for risk. You'd have been better off in a savings account over this period."}`}
+                      contribution={indicators.composite.contributions.sharpe}
                     />
                   )}
                 </div>
