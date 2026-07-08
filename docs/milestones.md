@@ -37,69 +37,30 @@
 
 ## Milestone 4: Per-Symbol Indicator Engine
 
-### Result models — `backend/indicators/models.py`
+- [x] Result models — `backend/indicators/models.py` (RSIResult, MACDResult, BollingerResult, SMACrossoverResult, ATRResult, BetaResult, SharpeResult, CompositeResult)
+- [x] Indicator math — `backend/indicators/math.py` (rsi, macd, bollinger_width, sma_crossover, atr, beta, sharpe_ratio + _ema, _sma helpers)
+- [x] Composite scoring — `backend/indicators/composite.py` (normalize_signal, composite_score, weighted Buy/Hold/Sell classification)
+- [x] Math tests — `backend/tests/test_indicators.py` (34 tests, deterministic data)
+- [x] API endpoint — `GET /api/symbols/{ticker}/indicators` with SPY join for beta, macro_history for Sharpe risk-free rate
+- [x] API tests — `backend/tests/test_api_indicators.py` (mock DB, response shape, 404)
+- [x] Wire up — numpy dep, router registered in main.py, 70 tests passing
+- [x] Frontend indicators panel — composite signal banner + 7 indicator cards, loads on symbol select
 
-- [ ] `RSIResult` — value (0-100), signal (oversold/overbought/neutral)
-- [ ] `MACDResult` — macd_line, signal_line, histogram, signal (bullish/bearish/neutral)
-- [ ] `BollingerResult` — width, upper, lower, signal
-- [ ] `SMACrossoverResult` — sma_50, sma_200, crossover_type (golden_cross/death_cross/none), days_since_cross
-- [ ] `ATRResult` — value, atr_percent (ATR as % of price)
-- [ ] `BetaResult` — value, interpretation
-- [ ] `SharpeResult` — value, risk_free_rate, interpretation
-- [ ] `CompositeResult` — score (-1 to +1), signal (buy/hold/sell), confidence (0-1), contributions (per-indicator breakdown)
+### Rework composite scoring
 
-### Indicator math — `backend/indicators/math.py`
+Normalization produces values too close to zero → everything says "hold" with <10% confidence.
 
-Pure functions — take `list[float]`, return result dataclasses. No DB, no side effects.
+- [ ] Replace discrete buckets with smooth linear interpolation (Bollinger, ATR, Beta)
+- [ ] Fix MACD normalization — normalize by price instead of macd_line to avoid near-zero division
+- [ ] Slow SMA crossover decay — signal within 60 days should still be strong
+- [ ] Lower buy/sell thresholds from ±0.25 to ±0.15
+- [ ] Rebalance confidence formula — weight agreement higher (0.6) than score magnitude (0.4)
+- [ ] Update tests to match new normalization ranges
+- [ ] Verify against real data — different symbols should produce meaningfully different signals
 
-- [ ] `_ema(data, period)` — exponential moving average helper
-- [ ] `_sma(data, period)` — simple moving average helper
-- [ ] `rsi(closes, period=14)` — Wilder's smoothing. <30 oversold (bullish), >70 overbought (bearish)
-- [ ] `macd(closes, fast=12, slow=26, signal_period=9)` — MACD line, signal line, histogram
-- [ ] `bollinger_width(closes, period=20, num_std=2.0)` — band width = (upper - lower) / middle
-- [ ] `sma_crossover(closes)` — detect golden/death cross between SMA-50 and SMA-200, count days since cross. Needs 200+ data points
-- [ ] `atr(highs, lows, closes, period=14)` — average true range + ATR as % of current price
-- [ ] `beta(symbol_closes, benchmark_closes)` — covariance / benchmark variance (numpy). Arrays pre-aligned by date
-- [ ] `sharpe_ratio(closes, risk_free_annual, trading_days=252)` — annualized risk-adjusted return
+### `indicator_snapshot` migration (deferred to M9)
 
-### Composite scoring — `backend/indicators/composite.py`
-
-- [ ] `normalize_signal(indicator_name, result)` — map each indicator result to [-1, +1] (bearish to bullish)
-- [ ] `composite_score(results)` — weighted sum: RSI 0.15, MACD 0.15, Bollinger 0.10, SMA 0.15, ATR 0.10, Beta 0.15, Sharpe 0.20. Re-normalize weights if any indicator is null
-- [ ] `classify_signal(score)` — >0.25 buy, <-0.25 sell, else hold. Confidence from |score| + indicator agreement
-
-### Tests — `backend/tests/test_indicators.py`
-
-- [ ] RSI: constant prices → 50, rising → near 100, falling → near 0
-- [ ] MACD: flat → histogram ~0, trending up → positive
-- [ ] Bollinger: constant prices → width = 0
-- [ ] SMA crossover: synthetic series with known crossover → verify detection + days count
-- [ ] ATR: constant-range bars → ATR equals that range
-- [ ] Beta: identical series → 1.0, doubled returns → 2.0
-- [ ] Sharpe: known return/volatility → verify formula
-- [ ] Composite: all bullish → buy, all bearish → sell, mixed → hold
-
-### API endpoint — `backend/routers/indicators.py`
-
-`GET /api/symbols/{ticker}/indicators`
-
-- [ ] Look up symbol_id by ticker (404 if not found)
-- [ ] Query price_history for symbol + SPY joined on date (last ~500 days for SMA warm-up)
-- [ ] Query latest fed_funds_rate from macro_history for Sharpe (fallback: 5.0% default)
-- [ ] Call all 7 indicator functions + composite scoring
-- [ ] Return JSON: `{ ticker, computed_at, data_points, indicators: {...}, composite: {...} }`
-- [ ] Graceful degradation: insufficient data → null indicator, excluded from composite
-
-### Wire up
-
-- [ ] Add `numpy` as explicit dependency (`uv add numpy`)
-- [ ] Register `indicators_router` in `backend/main.py`
-- [ ] API endpoint test (`backend/tests/test_api_indicators.py`) — mock DB, verify response shape + 404
-- [ ] Full test suite passes (`uv run pytest`)
-
-### `indicator_snapshot` migration (deferred to M10)
-
-- [ ] Migration: `indicator_snapshot` table — needed when data pipeline (M10) persists computed indicators on a schedule
+- [ ] Migration: `indicator_snapshot` table — needed when data pipeline (M9) persists computed indicators on a schedule
 
 ## Milestone 5: Portfolio Risk Engine
 
