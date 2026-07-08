@@ -304,3 +304,97 @@ class TestNormalizeSignal:
         from indicators.models import RSIResult
         val = normalize_signal("rsi", RSIResult(value=50.0, signal="neutral"))
         assert val == 0.0
+
+    def test_bollinger_smooth(self):
+        """Bollinger should produce different values for different widths, not buckets."""
+        from indicators.models import BollingerResult
+        narrow = normalize_signal("bollinger", BollingerResult(width=0.02, upper=102, lower=98, signal="low_volatility"))
+        medium = normalize_signal("bollinger", BollingerResult(width=0.06, upper=106, lower=94, signal="neutral"))
+        wide = normalize_signal("bollinger", BollingerResult(width=0.10, upper=110, lower=90, signal="high_volatility"))
+        assert narrow > medium > wide
+        assert narrow > 0.5  # strong bullish for tight bands
+        assert wide < -0.5   # strong bearish for wide bands
+
+    def test_atr_smooth(self):
+        """ATR should interpolate smoothly, not use discrete buckets."""
+        from indicators.models import ATRResult
+        low = normalize_signal("atr", ATRResult(value=0.5, atr_percent=0.5))
+        mid = normalize_signal("atr", ATRResult(value=2.0, atr_percent=2.0))
+        high = normalize_signal("atr", ATRResult(value=4.0, atr_percent=4.0))
+        assert low > mid > high
+        assert low > 0.4
+        assert abs(mid) < 0.1  # near zero at 2%
+        assert high < -0.5
+
+    def test_beta_smooth(self):
+        """Beta should interpolate smoothly."""
+        from indicators.models import BetaResult
+        low = normalize_signal("beta", BetaResult(value=0.5, interpretation="less volatile"))
+        market = normalize_signal("beta", BetaResult(value=1.0, interpretation="moves with market"))
+        high = normalize_signal("beta", BetaResult(value=2.0, interpretation="very volatile"))
+        assert low > market > high
+        assert low > 0.3
+        assert abs(market) < 0.1
+        assert high < -0.5
+
+    def test_macd_responds_to_magnitude(self):
+        """MACD should produce different signals for different histogram sizes."""
+        from indicators.models import MACDResult
+        strong = normalize_signal("macd", MACDResult(macd_line=3.0, signal_line=2.0, histogram=1.0, signal="bullish"))
+        weak = normalize_signal("macd", MACDResult(macd_line=3.0, signal_line=2.8, histogram=0.2, signal="bullish"))
+        assert strong > weak > 0
+
+    def test_sma_crossover_decay(self):
+        """Recent crossover should be stronger than old one, but old one should still matter."""
+        from indicators.models import SMACrossoverResult
+        recent = normalize_signal("sma_crossover", SMACrossoverResult(sma_50=110, sma_200=100, crossover_type="golden_cross", days_since_cross=5))
+        old = normalize_signal("sma_crossover", SMACrossoverResult(sma_50=110, sma_200=100, crossover_type="golden_cross", days_since_cross=100))
+        very_old = normalize_signal("sma_crossover", SMACrossoverResult(sma_50=110, sma_200=100, crossover_type="golden_cross", days_since_cross=200))
+        assert recent > old > 0
+        assert very_old >= 0.3  # floor keeps old crossovers relevant
+
+    def test_sma_no_crossover_uses_gap(self):
+        """When no crossover, SMA gap should still produce a weak signal."""
+        from indicators.models import SMACrossoverResult
+        above = normalize_signal("sma_crossover", SMACrossoverResult(sma_50=105, sma_200=100, crossover_type="none", days_since_cross=None))
+        below = normalize_signal("sma_crossover", SMACrossoverResult(sma_50=95, sma_200=100, crossover_type="none", days_since_cross=None))
+        assert above > 0  # SMA-50 above SMA-200 = bullish
+        assert below < 0  # SMA-50 below SMA-200 = bearish
+
+
+class TestCompositeConfidence:
+    """Verify confidence responds to indicator agreement."""
+
+    def test_unanimous_bullish_high_confidence(self):
+        from indicators.models import (
+            RSIResult, MACDResult, BollingerResult,
+            SMACrossoverResult, ATRResult, BetaResult, SharpeResult,
+        )
+        results = {
+            "rsi": RSIResult(value=25.0, signal="oversold"),
+            "macd": MACDResult(macd_line=2.0, signal_line=1.0, histogram=1.0, signal="bullish"),
+            "bollinger": BollingerResult(width=0.02, upper=102, lower=98, signal="low_volatility"),
+            "sma_crossover": SMACrossoverResult(sma_50=110, sma_200=100, crossover_type="golden_cross", days_since_cross=5),
+            "atr": ATRResult(value=0.8, atr_percent=0.8),
+            "beta": BetaResult(value=0.6, interpretation="less volatile"),
+            "sharpe": SharpeResult(value=2.5, risk_free_rate=5.0, interpretation="excellent"),
+        }
+        result = composite_score(results)
+        assert result.confidence >= 0.5  # strong agreement should produce decent confidence
+
+    def test_mixed_signals_lower_confidence(self):
+        from indicators.models import (
+            RSIResult, MACDResult, BollingerResult,
+            ATRResult, BetaResult, SharpeResult,
+        )
+        results = {
+            "rsi": RSIResult(value=25.0, signal="oversold"),           # bullish
+            "macd": MACDResult(macd_line=-1.0, signal_line=-0.5, histogram=-0.5, signal="bearish"),  # bearish
+            "bollinger": BollingerResult(width=0.06, upper=106, lower=94, signal="neutral"),  # neutral
+            "atr": ATRResult(value=2.0, atr_percent=2.0),              # neutral
+            "beta": BetaResult(value=1.5, interpretation="volatile"),   # bearish
+            "sharpe": SharpeResult(value=1.0, risk_free_rate=5.0, interpretation="good"),  # bullish
+        }
+        result = composite_score(results)
+        unanimous = 0.5  # from the test above
+        assert result.confidence < unanimous  # mixed signals = less confident
