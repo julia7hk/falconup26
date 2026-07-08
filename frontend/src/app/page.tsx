@@ -53,6 +53,27 @@ type SearchResult = {
   exchange: string;
 };
 
+type IndicatorData = {
+  ticker: string;
+  computed_at: string;
+  data_points: number;
+  indicators: {
+    rsi?: { value: number; signal: string };
+    macd?: { macd_line: number; signal_line: number; histogram: number; signal: string };
+    bollinger?: { width: number; upper: number; lower: number; signal: string };
+    sma_crossover?: { sma_50: number; sma_200: number; crossover_type: string; days_since_cross: number | null };
+    atr?: { value: number; atr_percent: number };
+    beta?: { value: number; interpretation: string };
+    sharpe?: { value: number; risk_free_rate: number; interpretation: string };
+  };
+  composite: {
+    score: number;
+    signal: string;
+    confidence: number;
+    contributions: Record<string, number>;
+  };
+};
+
 function Sparkline({ data }: { data: PriceBar[] }) {
   if (data.length < 2) return null;
   const closes = data.map((d) => d.close);
@@ -81,6 +102,52 @@ function Sparkline({ data }: { data: PriceBar[] }) {
   );
 }
 
+function SignalBadge({ signal }: { signal: string }) {
+  const colors: Record<string, string> = {
+    bullish: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
+    oversold: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
+    low_volatility: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
+    bearish: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
+    overbought: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
+    high_volatility: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
+    neutral: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
+  };
+  return (
+    <span
+      className={`rounded px-1.5 py-0.5 text-xs font-medium ${colors[signal] ?? colors.neutral}`}
+    >
+      {signal.replace("_", " ")}
+    </span>
+  );
+}
+
+function IndicatorCard({
+  name,
+  value,
+  signal,
+  detail,
+}: {
+  name: string;
+  value: string;
+  signal: string;
+  detail: string;
+}) {
+  return (
+    <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+          {name}
+        </p>
+        <SignalBadge signal={signal} />
+      </div>
+      <p className="mt-1 font-mono text-lg font-semibold dark:text-white">
+        {value}
+      </p>
+      <p className="mt-0.5 text-xs text-zinc-400">{detail}</p>
+    </div>
+  );
+}
+
 export default function Home() {
   const [catalog, setCatalog] = useState<CatalogSymbol[]>([]);
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
@@ -91,6 +158,9 @@ export default function Home() {
   const [sector, setSector] = useState<SectorInfo | null>(null);
   const [macro, setMacro] = useState<MacroSnapshot | null>(null);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [indicators, setIndicators] = useState<IndicatorData | null>(null);
+  const [indicatorsLoading, setIndicatorsLoading] = useState(false);
+  const [indicatorsError, setIndicatorsError] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -102,14 +172,34 @@ export default function Home() {
   }, []);
 
   async function selectSymbol(ticker: string, days = historyDays) {
+    const isNewTicker = ticker !== selectedTicker;
     setSelectedTicker(ticker);
-    setHistory([]);
+    if (isNewTicker) {
+      setIndicators(null);
+      setIndicatorsLoading(true);
+      setIndicatorsError("");
+    }
     try {
-      const res = await fetch(
-        `/api/symbols/${ticker}/history-db?days=${days}`
-      );
-      if (res.ok) setHistory(await res.json());
-    } catch {}
+      const fetches: Promise<Response>[] = [
+        fetch(`/api/symbols/${ticker}/history-db?days=${days}`),
+      ];
+      if (isNewTicker) {
+        fetches.push(fetch(`/api/symbols/${ticker}/indicators`));
+      }
+      const results = await Promise.all(fetches);
+      if (results[0].ok) setHistory(await results[0].json());
+      if (isNewTicker) {
+        if (results[1]?.ok) {
+          setIndicators(await results[1].json());
+        } else {
+          setIndicatorsError(`Could not load indicators (${results[1]?.status ?? "network error"})`);
+        }
+      }
+    } catch {
+      if (isNewTicker) setIndicatorsError("Failed to fetch indicators");
+    } finally {
+      if (isNewTicker) setIndicatorsLoading(false);
+    }
   }
 
   async function lookupSymbol() {
@@ -270,6 +360,154 @@ export default function Home() {
               </div>
             ) : (
               <p className="text-sm text-zinc-400">Loading...</p>
+            )}
+          </section>
+        )}
+
+        {/* Indicators Panel */}
+        {selectedTicker && (
+          <section className="flex flex-col gap-4">
+            <h2 className="text-xl font-semibold dark:text-zinc-200">
+              {selectedTicker} — Technical Indicators
+            </h2>
+
+            {indicatorsLoading && (
+              <p className="text-sm text-zinc-400">Loading indicators...</p>
+            )}
+
+            {indicatorsError && (
+              <p className="text-sm text-red-600 dark:text-red-400">{indicatorsError}</p>
+            )}
+
+            {indicators && (
+              <div className="flex flex-col gap-4">
+                {/* Composite Signal */}
+                <div
+                  className={`rounded-lg border p-5 ${
+                    indicators.composite.signal === "buy"
+                      ? "border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-950"
+                      : indicators.composite.signal === "sell"
+                        ? "border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-950"
+                        : "border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span
+                        className={`text-2xl font-bold uppercase ${
+                          indicators.composite.signal === "buy"
+                            ? "text-green-700 dark:text-green-400"
+                            : indicators.composite.signal === "sell"
+                              ? "text-red-700 dark:text-red-400"
+                              : "text-zinc-600 dark:text-zinc-300"
+                        }`}
+                      >
+                        {indicators.composite.signal}
+                      </span>
+                      <span className="ml-3 text-sm text-zinc-500 dark:text-zinc-400">
+                        Confidence: {(indicators.composite.confidence * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-mono text-lg font-semibold dark:text-zinc-200">
+                        {indicators.composite.score > 0 ? "+" : ""}
+                        {indicators.composite.score.toFixed(3)}
+                      </p>
+                      <p className="text-xs text-zinc-400">
+                        composite score
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Indicator Cards */}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {indicators.indicators.rsi && (
+                    <IndicatorCard
+                      name="RSI (14)"
+                      value={indicators.indicators.rsi.value.toFixed(1)}
+                      signal={indicators.indicators.rsi.signal}
+                      detail={
+                        indicators.indicators.rsi.signal === "oversold"
+                          ? "Below 30 — oversold, may bounce"
+                          : indicators.indicators.rsi.signal === "overbought"
+                            ? "Above 70 — overbought, may pull back"
+                            : "Between 30-70 — neutral momentum"
+                      }
+                    />
+                  )}
+                  {indicators.indicators.macd && (
+                    <IndicatorCard
+                      name="MACD (12/26/9)"
+                      value={indicators.indicators.macd.histogram.toFixed(4)}
+                      signal={indicators.indicators.macd.signal}
+                      detail={`Line: ${indicators.indicators.macd.macd_line.toFixed(4)} · Signal: ${indicators.indicators.macd.signal_line.toFixed(4)}`}
+                    />
+                  )}
+                  {indicators.indicators.bollinger && (
+                    <IndicatorCard
+                      name="Bollinger Width"
+                      value={(indicators.indicators.bollinger.width * 100).toFixed(2) + "%"}
+                      signal={indicators.indicators.bollinger.signal}
+                      detail={`Upper: $${indicators.indicators.bollinger.upper.toFixed(2)} · Lower: $${indicators.indicators.bollinger.lower.toFixed(2)}`}
+                    />
+                  )}
+                  {indicators.indicators.sma_crossover && (
+                    <IndicatorCard
+                      name="SMA 50/200"
+                      value={indicators.indicators.sma_crossover.crossover_type.replace("_", " ")}
+                      signal={
+                        indicators.indicators.sma_crossover.crossover_type === "golden_cross"
+                          ? "bullish"
+                          : indicators.indicators.sma_crossover.crossover_type === "death_cross"
+                            ? "bearish"
+                            : "neutral"
+                      }
+                      detail={`50d: $${indicators.indicators.sma_crossover.sma_50.toFixed(2)} · 200d: $${indicators.indicators.sma_crossover.sma_200.toFixed(2)}${indicators.indicators.sma_crossover.days_since_cross !== null ? ` · ${indicators.indicators.sma_crossover.days_since_cross}d ago` : ""}`}
+                    />
+                  )}
+                  {indicators.indicators.atr && (
+                    <IndicatorCard
+                      name="ATR (14)"
+                      value={"$" + indicators.indicators.atr.value.toFixed(2)}
+                      signal="neutral"
+                      detail={`${indicators.indicators.atr.atr_percent.toFixed(2)}% of price — daily volatility`}
+                    />
+                  )}
+                  {indicators.indicators.beta && (
+                    <IndicatorCard
+                      name="Beta vs S&P 500"
+                      value={indicators.indicators.beta.value.toFixed(2)}
+                      signal={
+                        indicators.indicators.beta.value < 0.8
+                          ? "bullish"
+                          : indicators.indicators.beta.value > 1.5
+                            ? "bearish"
+                            : "neutral"
+                      }
+                      detail={indicators.indicators.beta.interpretation}
+                    />
+                  )}
+                  {indicators.indicators.sharpe && (
+                    <IndicatorCard
+                      name="Sharpe Ratio"
+                      value={indicators.indicators.sharpe.value.toFixed(2)}
+                      signal={
+                        indicators.indicators.sharpe.value >= 1
+                          ? "bullish"
+                          : indicators.indicators.sharpe.value < 0
+                            ? "bearish"
+                            : "neutral"
+                      }
+                      detail={`${indicators.indicators.sharpe.interpretation} (rf: ${indicators.indicators.sharpe.risk_free_rate}%)`}
+                    />
+                  )}
+                </div>
+
+                <p className="text-xs text-zinc-400">
+                  Computed {indicators.computed_at} · {indicators.data_points} trading days of data
+                </p>
+              </div>
             )}
           </section>
         )}

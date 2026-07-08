@@ -35,20 +35,73 @@
 - [x] Seed default symbols (QQQ, TQQQ, SOXL + 13 more) with leverage factors + sector data
 - [x] One-time backfill script — pull historical OHLCV + FRED data into Postgres
 
-## Milestone 4a: Per-Symbol Indicator Engine
+## Milestone 4: Per-Symbol Indicator Engine
 
-- [ ] RSI (14-day)
-- [ ] MACD (12/26/9)
-- [ ] Bollinger Band width (20-day, 2 sigma)
-- [ ] 50/200-day SMA crossover (golden cross / death cross)
-- [ ] ATR (14-day volatility)
-- [ ] Beta (vs S&P 500, 1-year)
-- [ ] Sharpe ratio (1-year, risk-free rate from FRED)
-- [ ] Composite signal score — weighted aggregate of all indicators
-- [ ] Buy / Hold / Sell classification from composite score + confidence level
-- [ ] Migration: `indicator_snapshot` table (symbol, date, indicator values, composite score, signal, confidence) — persist when needed
+### Result models — `backend/indicators/models.py`
 
-## Milestone 4b: Portfolio Risk Engine
+- [ ] `RSIResult` — value (0-100), signal (oversold/overbought/neutral)
+- [ ] `MACDResult` — macd_line, signal_line, histogram, signal (bullish/bearish/neutral)
+- [ ] `BollingerResult` — width, upper, lower, signal
+- [ ] `SMACrossoverResult` — sma_50, sma_200, crossover_type (golden_cross/death_cross/none), days_since_cross
+- [ ] `ATRResult` — value, atr_percent (ATR as % of price)
+- [ ] `BetaResult` — value, interpretation
+- [ ] `SharpeResult` — value, risk_free_rate, interpretation
+- [ ] `CompositeResult` — score (-1 to +1), signal (buy/hold/sell), confidence (0-1), contributions (per-indicator breakdown)
+
+### Indicator math — `backend/indicators/math.py`
+
+Pure functions — take `list[float]`, return result dataclasses. No DB, no side effects.
+
+- [ ] `_ema(data, period)` — exponential moving average helper
+- [ ] `_sma(data, period)` — simple moving average helper
+- [ ] `rsi(closes, period=14)` — Wilder's smoothing. <30 oversold (bullish), >70 overbought (bearish)
+- [ ] `macd(closes, fast=12, slow=26, signal_period=9)` — MACD line, signal line, histogram
+- [ ] `bollinger_width(closes, period=20, num_std=2.0)` — band width = (upper - lower) / middle
+- [ ] `sma_crossover(closes)` — detect golden/death cross between SMA-50 and SMA-200, count days since cross. Needs 200+ data points
+- [ ] `atr(highs, lows, closes, period=14)` — average true range + ATR as % of current price
+- [ ] `beta(symbol_closes, benchmark_closes)` — covariance / benchmark variance (numpy). Arrays pre-aligned by date
+- [ ] `sharpe_ratio(closes, risk_free_annual, trading_days=252)` — annualized risk-adjusted return
+
+### Composite scoring — `backend/indicators/composite.py`
+
+- [ ] `normalize_signal(indicator_name, result)` — map each indicator result to [-1, +1] (bearish to bullish)
+- [ ] `composite_score(results)` — weighted sum: RSI 0.15, MACD 0.15, Bollinger 0.10, SMA 0.15, ATR 0.10, Beta 0.15, Sharpe 0.20. Re-normalize weights if any indicator is null
+- [ ] `classify_signal(score)` — >0.25 buy, <-0.25 sell, else hold. Confidence from |score| + indicator agreement
+
+### Tests — `backend/tests/test_indicators.py`
+
+- [ ] RSI: constant prices → 50, rising → near 100, falling → near 0
+- [ ] MACD: flat → histogram ~0, trending up → positive
+- [ ] Bollinger: constant prices → width = 0
+- [ ] SMA crossover: synthetic series with known crossover → verify detection + days count
+- [ ] ATR: constant-range bars → ATR equals that range
+- [ ] Beta: identical series → 1.0, doubled returns → 2.0
+- [ ] Sharpe: known return/volatility → verify formula
+- [ ] Composite: all bullish → buy, all bearish → sell, mixed → hold
+
+### API endpoint — `backend/routers/indicators.py`
+
+`GET /api/symbols/{ticker}/indicators`
+
+- [ ] Look up symbol_id by ticker (404 if not found)
+- [ ] Query price_history for symbol + SPY joined on date (last ~500 days for SMA warm-up)
+- [ ] Query latest fed_funds_rate from macro_history for Sharpe (fallback: 5.0% default)
+- [ ] Call all 7 indicator functions + composite scoring
+- [ ] Return JSON: `{ ticker, computed_at, data_points, indicators: {...}, composite: {...} }`
+- [ ] Graceful degradation: insufficient data → null indicator, excluded from composite
+
+### Wire up
+
+- [ ] Add `numpy` as explicit dependency (`uv add numpy`)
+- [ ] Register `indicators_router` in `backend/main.py`
+- [ ] API endpoint test (`backend/tests/test_api_indicators.py`) — mock DB, verify response shape + 404
+- [ ] Full test suite passes (`uv run pytest`)
+
+### `indicator_snapshot` migration (deferred to M10)
+
+- [ ] Migration: `indicator_snapshot` table — needed when data pipeline (M10) persists computed indicators on a schedule
+
+## Milestone 5: Portfolio Risk Engine
 
 - [ ] Concentration score — Herfindahl index across holdings + sector exposure breakdown
 - [ ] Pairwise correlation matrix of all holdings (rolling 1-year daily returns)
@@ -60,9 +113,9 @@
 - [ ] Migration: `portfolio_risk_snapshot` table (concentration, leverage, beta, drawdown, correlation matrix, risk grade) — persist when needed
 - [ ] What-if engine — recompute all portfolio risk metrics with a hypothetical position added/removed, return structured diff
 
-## Milestone 5: Explainer Layer
+## Milestone 6: Explainer Layer
 
-### 5a: Deterministic Explainers (always available, no API dependency)
+### Deterministic Explainers (always available, no API dependency)
 
 - [ ] Per-indicator status: current value, threshold that triggered, bullish/bearish/neutral
 - [ ] Plain-English template per indicator ("RSI is 28 — below 30 indicates oversold, which is a bullish signal")
@@ -70,7 +123,7 @@
 - [ ] Indicator weight transparency — show how much each indicator contributed to the composite
 - [ ] Portfolio risk templates — concentration, leverage, correlation summaries as formatted strings
 
-### 5b: Structured LLM Explainer (enriches deterministic layer)
+### Structured LLM Explainer (enriches deterministic layer)
 
 Architecture: LLM never computes anything. It translates structured risk data
 into personalized, contextual explanations. No chat box, no free-text input.
@@ -82,7 +135,7 @@ into personalized, contextual explanations. No chat box, no free-text input.
   - `what_if.py` — explain before/after diff when user models a hypothetical trade
 - [ ] Context assembler (`backend/llm/context.py`) — takes typed risk data from the engine, formats into structured prompt context
 - [ ] Output validator (`backend/llm/validator.py`) — reject responses that reference symbols not in portfolio, enforce output structure, catch hallucinations
-- [ ] Deterministic fallback — if LLM is unavailable or validation fails, serve template-string explanations from 5a (app never gates on LLM)
+- [ ] Deterministic fallback — if LLM is unavailable or validation fails, serve template-string explanations from deterministic layer (app never gates on LLM)
 - [ ] Migration: `llm_analysis_cache` table (prompt_version, data_hash, response, created_at, ttl)
 - [ ] Response cache (`backend/llm/cache.py`) — keyed on (prompt_version, data_hash). Same portfolio state = same explanation. No redundant API calls.
 - [ ] API client (`backend/llm/client.py`) — thin wrapper with retry, timeout, rate limiting
@@ -92,7 +145,7 @@ User-facing behavior: each risk metric on the dashboard has an "Explain"
 button. Click triggers a structured prompt with the precomputed data. No user
 prompt authoring.
 
-## Milestone 6: Portfolio Dashboard — Frontend
+## Milestone 7: Portfolio Dashboard — Frontend
 
 ### Tab 1: Holdings
 
@@ -125,7 +178,7 @@ prompt authoring.
 - [ ] Mobile-first responsive layout — usable on phone during market hours
 - [ ] Empty state + onboarding (seed QQQ, TQQQ, SOXL as defaults)
 
-## Milestone 7: API Layer
+## Milestone 8: API Layer
 
 - [ ] `GET /api/symbols/search?q=` — symbol lookup (autocomplete)
 - [ ] `GET /api/symbols/{ticker}/price` — current + historical price
@@ -140,7 +193,7 @@ prompt authoring.
 - [ ] `POST /api/portfolio/what-if` — hypothetical position diff (accepts symbol + quantity, returns before/after risk metrics)
 - [ ] `POST /api/portfolio/explain` — LLM explanation for a specific metric (accepts metric key, returns cached or fresh explanation)
 
-## Milestone 8: Data Pipeline
+## Milestone 9: Data Pipeline
 
 - [ ] Scheduled price refresh (daily OHLCV backfill + intraday current price)
 - [ ] Indicator recalculation on new price data
@@ -148,7 +201,7 @@ prompt authoring.
 - [ ] LLM cache invalidation when underlying data changes
 - [ ] Stale-data detection + user-facing "last updated" timestamp
 
-## Milestone 9: Polish & Launch
+## Milestone 10: Polish & Launch
 
 - [ ] Loading skeletons for price/indicator fetches
 - [ ] Error states (API down, invalid symbol, rate limit hit)
