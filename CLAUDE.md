@@ -212,6 +212,18 @@ Postgres (price_history + macro_history)
 - **FRED date strings:** `FredProvider.get_series_history()` returns dates as ISO strings, not `date` objects. When inserting into Postgres via asyncpg, convert with `date.fromisoformat()` first.
 - **React component definitions:** Do not define React components inside other components — Next.js 16 ESLint will flag this and it causes state reset on every render. Define them at module scope.
 
+## Ideas Under Consideration
+
+### Pension fund coattail tracking
+
+Track holdings of major pension funds (국민연금/NPS, CPP, CalPERS, etc.) as a "smart money" signal for beginner investors. The thesis: these funds have professional analysts, long horizons, and fiduciary obligations — following their moves is a legitimate strategy. Open questions before this is actionable:
+
+- **Data sources:** NPS reports via DART/FSS (Korean), SEC 13F (US institutional), CalPERS quarterly reports. Each has different format, update schedule, and API. Significantly more data engineering than current yfinance/FRED setup.
+- **Disclosure lag:** 13F filings are 45 days delayed, NPS quarterly/monthly. By the time data is visible, the trade is old.
+- **Scale mismatch:** Pension fund positions (billions) don't map directly to retail ETF decisions.
+- **Signal-to-action gap:** Needs an interpretation layer to translate "NPS bought Samsung" into something actionable for a QQQ/TQQQ holder.
+- **Starting point:** If pursued, start with SEC 13F data only (free APIs exist, e.g. SEC EDGAR) and frame as "institutional activity" rather than multi-country pension aggregation.
+
 ## Self-Maintenance Rule
 
 After completing any feature, architectural shift, or major code correction, update this CLAUDE.md file to reflect the current state, updated test commands, or newly discovered pitfalls before closing the session.
