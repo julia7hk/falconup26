@@ -203,6 +203,125 @@ class TestGetPortfolio:
         assert data["total_value"] == 0
 
 
+    @patch("routers.portfolio.get_price_fetcher", _patched_fetcher)
+    def test_get_portfolio_prices_complete(self):
+        async def _gen():
+            yield _mock_session_for_list()
+        app.dependency_overrides[get_session] = _gen
+
+        resp = client.get("/api/portfolio")
+        data = resp.json()
+        assert data["prices_complete"] is True
+
+    def test_get_portfolio_quote_failure_excludes_cost_from_totals(self):
+        """When a quote fails, that holding's cost is excluded from totals."""
+        def _failing_fetcher():
+            provider = MagicMock()
+            provider.get_quote.side_effect = RuntimeError("rate limited")
+            return PriceFetcher(provider)
+
+        async def _gen():
+            yield _mock_session_for_list()
+        app.dependency_overrides[get_session] = _gen
+
+        with patch("routers.portfolio.get_price_fetcher", _failing_fetcher):
+            resp = client.get("/api/portfolio")
+
+        data = resp.json()
+        assert len(data["holdings"]) == 1
+        h = data["holdings"][0]
+        assert h["price"] is None
+        assert h["market_value"] is None
+        # Totals should NOT include the failed holding's cost
+        assert data["total_value"] == 0
+        assert data["total_cost"] == 0
+        assert data["total_pnl"] == 0
+        assert data["prices_complete"] is False
+
+    def test_get_portfolio_partial_quotes(self):
+        """With 2 holdings and 1 quote failure, totals reflect only the priced holding."""
+        row2 = PortfolioRow(
+            id=2, ticker="SPY", name="SPDR S&P 500", type="etf",
+            sector="Broad Market", leverage_factor=1, shares=5, avg_cost=500.0,
+        )
+
+        call_count = 0
+        def _partial_fetcher():
+            provider = MagicMock()
+            def _quote(symbol):
+                nonlocal call_count
+                call_count += 1
+                if symbol == "QQQ":
+                    return Quote(
+                        symbol="QQQ", price=500.0, change=1.0,
+                        change_percent=0.2, timestamp=NOW,
+                    )
+                raise RuntimeError("unknown ticker")
+            provider.get_quote.side_effect = _quote
+            return PriceFetcher(provider)
+
+        async def _gen():
+            yield _mock_session_for_list(rows=[SAMPLE_PORTFOLIO_ROW, row2])
+        app.dependency_overrides[get_session] = _gen
+
+        with patch("routers.portfolio.get_price_fetcher", _partial_fetcher):
+            resp = client.get("/api/portfolio")
+
+        data = resp.json()
+        assert len(data["holdings"]) == 2
+        # Only QQQ is priced: 10 shares * $500 = $5000 value, cost = 10 * $480 = $4800
+        assert data["total_value"] == 5000.0
+        assert data["total_cost"] == 4800.0
+        assert data["total_pnl"] == 200.0
+        assert data["prices_complete"] is False
+
+
+class TestAddHoldingMerge:
+    """Test that adding a duplicate symbol merges via ON CONFLICT."""
+
+    def teardown_method(self):
+        app.dependency_overrides.clear()
+
+    def test_add_duplicate_merges(self):
+        """Adding same symbol twice should upsert (weighted avg cost)."""
+        session = AsyncMock()
+        call_count = 0
+
+        async def fake_execute(query, params=None):
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            if call_count == 1:
+                # symbol lookup
+                result.fetchone.return_value = SymbolIdRow(id=1)
+            elif call_count == 2:
+                # UPSERT RETURNING id — returns the existing row id
+                result.scalar.return_value = 1
+            else:
+                # _get_holding_or_404
+                merged = HoldingRow(
+                    id=1, ticker="QQQ", name="Invesco QQQ Trust",
+                    shares=20, avg_cost=490.0, created_at=NOW,
+                )
+                result.fetchone.return_value = merged
+            return result
+
+        session.execute = fake_execute
+
+        async def _gen():
+            yield session
+        app.dependency_overrides[get_session] = _gen
+
+        resp = client.post("/api/portfolio/holdings", json={
+            "ticker": "QQQ", "shares": 10, "avg_cost": 500.0,
+        })
+        assert resp.status_code == 201
+        data = resp.json()
+        # The mock returns the merged result
+        assert data["shares"] == 20
+        assert data["avg_cost"] == 490.0
+
+
 class TestUpdateHolding:
     def teardown_method(self):
         app.dependency_overrides.clear()

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -70,11 +72,18 @@ async def add_holding(body: HoldingCreate, session: AsyncSession = Depends(get_s
     if not symbol_row:
         raise HTTPException(status_code=404, detail=f"Symbol not in database: {ticker}")
 
-    # Insert holding
+    # Upsert: merge into existing holding with weighted average cost
     result = await session.execute(
         text("""
             INSERT INTO portfolio_holding (symbol_id, shares, avg_cost)
             VALUES (:symbol_id, :shares, :avg_cost)
+            ON CONFLICT (symbol_id) DO UPDATE SET
+                avg_cost = (
+                    portfolio_holding.avg_cost * portfolio_holding.shares
+                    + EXCLUDED.avg_cost * EXCLUDED.shares
+                ) / (portfolio_holding.shares + EXCLUDED.shares),
+                shares = portfolio_holding.shares + EXCLUDED.shares,
+                updated_at = now()
             RETURNING id
         """),
         {"symbol_id": symbol_row.id, "shares": body.shares, "avg_cost": body.avg_cost},
@@ -98,37 +107,54 @@ async def get_portfolio(session: AsyncSession = Depends(get_session)):
     rows = result.fetchall()
 
     if not rows:
-        return {"holdings": [], "total_value": 0, "total_cost": 0, "total_pnl": 0}
+        return {
+            "holdings": [], "total_value": 0, "total_cost": 0,
+            "total_pnl": 0, "prices_complete": True,
+        }
 
-    # Fetch live quotes for all tickers
+    # Fetch live quotes in parallel, off the event loop
     fetcher = get_price_fetcher()
+    tickers = [row.ticker for row in rows]
+
+    async def _fetch_quote(ticker: str):
+        try:
+            return await asyncio.to_thread(fetcher.get_quote, ticker)
+        except Exception:
+            return None
+
+    quotes = await asyncio.gather(*(_fetch_quote(t) for t in tickers))
+    quote_map = dict(zip(tickers, quotes))
+
     holdings = []
     total_value = 0.0
     total_cost = 0.0
+    all_priced = True
 
     for row in rows:
         shares = float(row.shares)
         avg_cost = float(row.avg_cost)
         cost_basis = shares * avg_cost
 
-        # Best-effort live quote
-        try:
-            quote = fetcher.get_quote(row.ticker)
+        quote = quote_map.get(row.ticker)
+        if quote is not None:
             price = quote.price
             change = quote.change
             change_percent = quote.change_percent
-        except Exception:
+        else:
             price = None
             change = None
             change_percent = None
 
-        market_value = shares * price if price else None
-        pnl = market_value - cost_basis if market_value else None
+        market_value = shares * price if price is not None else None
+        pnl = market_value - cost_basis if market_value is not None else None
         pnl_percent = (pnl / cost_basis * 100) if pnl is not None and cost_basis else None
 
+        # Only include in totals when we have a live price
         if market_value is not None:
             total_value += market_value
-        total_cost += cost_basis
+            total_cost += cost_basis
+        else:
+            all_priced = False
 
         holdings.append({
             "id": row.id,
@@ -153,6 +179,7 @@ async def get_portfolio(session: AsyncSession = Depends(get_session)):
         "total_value": total_value,
         "total_cost": total_cost,
         "total_pnl": total_value - total_cost,
+        "prices_complete": all_priced,
     }
 
 

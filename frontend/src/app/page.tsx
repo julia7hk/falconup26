@@ -98,6 +98,7 @@ type Portfolio = {
   total_value: number;
   total_cost: number;
   total_pnl: number;
+  prices_complete: boolean;
 };
 
 function Sparkline({ data }: { data: PriceBar[] }) {
@@ -280,6 +281,7 @@ export default function Home() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editShares, setEditShares] = useState("");
   const [editAvgCost, setEditAvgCost] = useState("");
+  const [portfolioError, setPortfolioError] = useState("");
   const [holdingSignals, setHoldingSignals] = useState<Record<string, { signal: string; confidence: number }>>({});
 
   useEffect(() => {
@@ -320,6 +322,12 @@ export default function Home() {
 
   async function addHolding() {
     if (!addTicker.trim() || !addShares || !addAvgCost) return;
+    const shares = parseFloat(addShares);
+    const avgCost = parseFloat(addAvgCost);
+    if (isNaN(shares) || shares <= 0 || isNaN(avgCost) || avgCost <= 0) {
+      setAddError("Shares and avg cost must be positive numbers");
+      return;
+    }
     setAddError("");
     setAddLoading(true);
     try {
@@ -349,27 +357,46 @@ export default function Home() {
   }
 
   async function updateHolding(id: number) {
+    setPortfolioError("");
     try {
+      const shares = editShares ? parseFloat(editShares) : undefined;
+      const avgCost = editAvgCost ? parseFloat(editAvgCost) : undefined;
+      if ((shares !== undefined && (isNaN(shares) || shares <= 0)) ||
+          (avgCost !== undefined && (isNaN(avgCost) || avgCost <= 0))) {
+        setPortfolioError("Shares and avg cost must be positive numbers");
+        return;
+      }
       const body: Record<string, number> = {};
-      if (editShares) body.shares = parseFloat(editShares);
-      if (editAvgCost) body.avg_cost = parseFloat(editAvgCost);
+      if (shares !== undefined) body.shares = shares;
+      if (avgCost !== undefined) body.avg_cost = avgCost;
       const res = await fetch(`/api/portfolio/holdings/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (res.ok) {
-        setEditingId(null);
-        await fetchPortfolio();
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || `Update failed (${res.status})`);
       }
-    } catch {}
+      setEditingId(null);
+      await fetchPortfolio();
+    } catch (e) {
+      setPortfolioError(e instanceof Error ? e.message : "Failed to update holding");
+    }
   }
 
   async function deleteHolding(id: number) {
+    setPortfolioError("");
     try {
       const res = await fetch(`/api/portfolio/holdings/${id}`, { method: "DELETE" });
-      if (res.ok) await fetchPortfolio();
-    } catch {}
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || `Delete failed (${res.status})`);
+      }
+      await fetchPortfolio();
+    } catch (e) {
+      setPortfolioError(e instanceof Error ? e.message : "Failed to delete holding");
+    }
   }
 
   async function selectSymbol(ticker: string, days = historyDays) {
@@ -529,33 +556,45 @@ export default function Home() {
             </div>
           )}
 
+          {/* Portfolio Error */}
+          {portfolioError && (
+            <p className="text-sm text-red-600 dark:text-red-400">{portfolioError}</p>
+          )}
+
           {/* Portfolio Summary */}
           {portfolio && portfolio.holdings.length > 0 && (
-            <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">Total Value</p>
-                <p className="font-mono text-xl font-semibold dark:text-white">
-                  ${portfolio.total_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            <>
+              {!portfolio.prices_complete && (
+                <p className="text-sm text-amber-600 dark:text-amber-400">
+                  Some prices are unavailable — totals may be incomplete.
                 </p>
+              )}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400">Total Value</p>
+                  <p className="font-mono text-xl font-semibold dark:text-white">
+                    ${portfolio.total_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400">Total Cost</p>
+                  <p className="font-mono text-xl font-semibold dark:text-white">
+                    ${portfolio.total_cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400">Total P&L</p>
+                  <p className={`font-mono text-xl font-semibold ${
+                    portfolio.total_pnl >= 0
+                      ? "text-green-600 dark:text-green-400"
+                      : "text-red-600 dark:text-red-400"
+                  }`}>
+                    {portfolio.total_pnl >= 0 ? "+" : ""}
+                    ${portfolio.total_pnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                </div>
               </div>
-              <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">Total Cost</p>
-                <p className="font-mono text-xl font-semibold dark:text-white">
-                  ${portfolio.total_cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </p>
-              </div>
-              <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">Total P&L</p>
-                <p className={`font-mono text-xl font-semibold ${
-                  portfolio.total_pnl >= 0
-                    ? "text-green-600 dark:text-green-400"
-                    : "text-red-600 dark:text-red-400"
-                }`}>
-                  {portfolio.total_pnl >= 0 ? "+" : ""}
-                  ${portfolio.total_pnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </p>
-              </div>
-            </div>
+            </>
           )}
 
           {/* Holdings List */}
