@@ -13,7 +13,8 @@ Status reflects what's shipped to prod. See
       see current value, total P&L, and per-position gain/loss
 - [ ] Per-symbol risk indicator panel — consolidate key metrics in one
       view: RSI, MACD, Bollinger Band width, 50/200-day SMA crossover,
-      ATR (volatility), beta, Sharpe ratio
+      ATR (volatility), beta, Sharpe ratio, Sortino ratio (downside-only
+      risk), max drawdown (worst peak-to-trough loss)
 - [ ] Buy / Hold / Sell signal with confidence score — weighted
       composite of the indicators above, displayed as a clear badge per
       symbol

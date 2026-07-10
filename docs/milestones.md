@@ -56,7 +56,22 @@
 - [x] Rebalance confidence formula — agreement 0.6, score magnitude 0.4
 - [x] Tests updated — 8 new normalization tests (42 indicator tests, 78 total)
 
-## Milestone 5: Portfolio  
+### Add Sortino ratio + max drawdown to indicator engine
+
+Sortino penalizes only downside volatility (better than Sharpe for conservative investors).
+Max drawdown shows worst peak-to-trough loss — critical for leveraged ETFs like TQQQ/SOXL.
+
+- [ ] `SortinoResult` model in `models.py` (value, risk_free_rate, interpretation)
+- [ ] `sortino_ratio()` in `math.py` — same signature as `sharpe_ratio()`, filter for negative returns in denominator
+- [ ] `MaxDrawdownResult` model in `models.py` (value as %, peak_date, trough_date)
+- [ ] `max_drawdown()` in `math.py` — running max vs current value over closes
+- [ ] Add normalization cases in `composite.py` for both new indicators
+- [ ] Rebalance composite weights (9 indicators instead of 7)
+- [ ] Tests for Sortino + max drawdown in `test_indicators.py`
+- [ ] Wire into `/api/symbols/{ticker}/indicators` endpoint
+- [ ] Frontend: add Sortino + max drawdown cards to indicator panel
+
+## Milestone 5: Portfolio
 
 DB table exists (`portfolio_holding` from M3). This milestone adds the API + frontend to manage holdings.
 
