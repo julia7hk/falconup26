@@ -3,6 +3,9 @@ FROM node:24-slim
 ARG NEXT_PUBLIC_FASTAPI_SERVER
 ENV NEXT_PUBLIC_FASTAPI_SERVER=$NEXT_PUBLIC_FASTAPI_SERVER
 
+ARG NEXT_PUBLIC_BETTER_AUTH_URL
+ENV NEXT_PUBLIC_BETTER_AUTH_URL=$NEXT_PUBLIC_BETTER_AUTH_URL
+
 WORKDIR /app
 
 # Install dependencies first (cached layer)
@@ -11,6 +14,11 @@ RUN npm ci
 
 # Copy application code
 COPY . .
+
+# Generate Prisma client (uses placeholder URL from prisma.config.ts
+# when DATABASE_URL is not set — only the generator needs to parse it,
+# runtime queries use the actual DATABASE_URL from the environment)
+RUN npx prisma generate
 
 RUN npm run build
 
