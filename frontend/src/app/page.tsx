@@ -494,9 +494,12 @@ export default function Home() {
           </h1>
           {session ? (
             <div className="flex items-center gap-3">
-              <span className="text-sm text-zinc-500 dark:text-zinc-400">
+              <a
+                href="/profile"
+                className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+              >
                 {session.user.name || session.user.email}
-              </span>
+              </a>
               <button
                 onClick={async () => {
                   await authClient.signOut();

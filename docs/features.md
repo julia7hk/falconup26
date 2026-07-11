@@ -62,7 +62,12 @@ Status reflects what's shipped to prod. See
 - [ ] Session bridge — FastAPI reads Better Auth's session cookie and
       looks up the shared session table in Postgres to resolve user_id
 
-## V0.6 — "make it sticky"
+## V0.6 — "make it personal"
+
+- [ ] Risk profile setting — user selects conservative/moderate/aggressive
+      so signals and explainers can be tailored to their risk tolerance
+
+## V0.7 — "make it sticky"
 
 - [ ] Watchlist — add/remove symbols you're tracking but don't own yet;
       see the same indicator panel + signal without adding to portfolio
