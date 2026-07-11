@@ -17,6 +17,16 @@ would be open to investing in individual company stocks if I was more educated
 and aware of what I was doing and had the confidence and evidence to put money
 into it."
 
+Project goals (priority order): learning & resume > personal use > multi-user > monetization. The app is deployed at `falconup.julia7hk.com` on oc40.
+
+## Current Status & Next Priority
+
+**Deployed** at `falconup.julia7hk.com` (oc40, Oracle Cloud Ampere ARM64). M1–M5 complete: project foundation, data sources, database, indicator engine, portfolio CRUD + frontend.
+
+**No authentication.** The app currently has zero auth. There is one shared `portfolio_holding` table with no `user_id` — anyone who visits the URL can view, add, edit, and delete holdings. All portfolio queries are unscoped.
+
+**Next milestone: Authentication & Multi-Tenancy (M5.6).** See `docs/milestones.md` for the full breakdown. Scope: `user` table + bcrypt + JWT in httpOnly cookies + `user_id` FK on `portfolio_holding` + auth middleware on all portfolio routes + login/register pages.
+
 ## Structure
 
 - `backend/` — FastAPI + Python 3.13 (API, indicator engine, portfolio risk engine, LLM explainer)
@@ -159,14 +169,15 @@ scripts/backfill.py                   → pull 5yr OHLCV + FRED history into Pos
 
 Tables:
 - `symbol` — ticker (unique), name, type (etf/stock), sector, industry, leverage_factor, timestamps
-- `portfolio_holding` — symbol_id FK, shares, avg_cost, timestamps
+- `portfolio_holding` — symbol_id FK, shares, avg_cost, timestamps. **No `user_id` yet — single shared portfolio, no auth.** UNIQUE on `symbol_id` (will change to `(user_id, symbol_id)` in M5.6).
 - `price_history` — symbol_id FK, date, OHLCV, volume. Indexed + unique on (symbol_id, date)
 - `macro_history` — series name, date, value. Indexed + unique on (series, date)
 
-Future tables (deferred to their respective milestones):
-- `indicator_snapshot` — M4 (deferred to M9 data pipeline)
-- `portfolio_risk_snapshot` — M5
-- `llm_analysis_cache` — M6
+Future tables:
+- `user` — M5.6 (auth): email, password_hash, name, timestamps
+- `indicator_snapshot` — M9 (data pipeline)
+- `portfolio_risk_snapshot` — M6
+- `llm_analysis_cache` — M8
 
 ### Indicator Engine (`backend/indicators/`)
 
@@ -219,6 +230,7 @@ Postgres (price_history + macro_history)
 - **db.py import safety:** `db.py` defers engine creation when `DATABASE_URL` is missing. This allows CI tests to import the app without a database. The error only fires at runtime when `get_session()` is called.
 - **FRED date strings:** `FredProvider.get_series_history()` returns dates as ISO strings, not `date` objects. When inserting into Postgres via asyncpg, convert with `date.fromisoformat()` first.
 - **React component definitions:** Do not define React components inside other components — Next.js 16 ESLint will flag this and it causes state reset on every render. Define them at module scope.
+- **No authentication:** All API endpoints are publicly accessible. All portfolio data is shared across all visitors. Do not add features that assume user isolation until M5.6 (auth) is complete. When building auth, use httpOnly cookies for JWT storage (not localStorage), and scope every `portfolio_holding` query by `user_id`.
 
 ## Ideas Under Consideration
 

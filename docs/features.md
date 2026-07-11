@@ -45,7 +45,22 @@ Status reflects what's shipped to prod. See
       for both; default watchlist seeded with QQQ, TQQQ, SOXL
 - [ ] Mobile-first responsive UI — usable on phone during market hours
 
-## V0.5 — "make it sticky"
+## V0.5 — "secure & multi-user"
+
+> Promoted from V1. Auth is the next priority because the app is publicly
+> deployed with no authentication — anyone can modify the shared portfolio.
+> Building it now also serves the primary project goal (learning/resume)
+> and lays the foundation for multi-user support.
+
+- [ ] User registration + login — email/password, bcrypt hashing, JWT in
+      httpOnly cookies (not localStorage — deliberate security choice)
+- [ ] Per-user portfolio isolation — `user_id` FK on `portfolio_holding`,
+      every query scoped to the authenticated user
+- [ ] Protected routes — unauthenticated users redirected to login
+- [ ] Session management — `/api/auth/me` check on page load, logout
+      clears cookie
+
+## V0.6 — "make it sticky"
 
 - [ ] Watchlist — add/remove symbols you're tracking but don't own yet;
       see the same indicator panel + signal without adding to portfolio
@@ -57,8 +72,6 @@ Status reflects what's shipped to prod. See
 
 ## V1 — "growth"
 
-- [ ] Auth + cloud sync — sign up so portfolio and watchlist persist
-      across devices
 - [ ] Push / email notifications for triggered alerts
 - [ ] Alert thresholds — set per-symbol alerts (e.g. "notify me if RSI
       drops below 30 or MACD crosses bullish")
