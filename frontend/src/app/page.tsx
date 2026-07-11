@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { authClient } from "@/lib/auth-client";
 
 type CatalogSymbol = {
   ticker: string;
@@ -257,6 +259,8 @@ function CompositeCard({ indicators }: { indicators: IndicatorData }) {
 }
 
 export default function Home() {
+  const router = useRouter();
+  const { data: session } = authClient.useSession();
   const [catalog, setCatalog] = useState<CatalogSymbol[]>([]);
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
   const [history, setHistory] = useState<PriceBar[]>([]);
@@ -294,7 +298,7 @@ export default function Home() {
 
   async function fetchPortfolio() {
     try {
-      const res = await fetch("/api/portfolio");
+      const res = await fetch("/api/portfolio", { credentials: "include" });
       if (!res.ok) return;
       const data: Portfolio = await res.json();
       setPortfolio(data);
@@ -333,6 +337,7 @@ export default function Home() {
     try {
       const res = await fetch("/api/portfolio/holdings", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ticker: addTicker.toUpperCase(),
@@ -371,6 +376,7 @@ export default function Home() {
       if (avgCost !== undefined) body.avg_cost = avgCost;
       const res = await fetch(`/api/portfolio/holdings/${id}`, {
         method: "PUT",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
@@ -388,7 +394,7 @@ export default function Home() {
   async function deleteHolding(id: number) {
     setPortfolioError("");
     try {
-      const res = await fetch(`/api/portfolio/holdings/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/portfolio/holdings/${id}`, { method: "DELETE", credentials: "include" });
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.detail || `Delete failed (${res.status})`);
@@ -478,9 +484,27 @@ export default function Home() {
   return (
     <div className="flex flex-col flex-1 items-center bg-zinc-50 font-sans dark:bg-zinc-950">
       <main className="flex flex-1 w-full max-w-6xl flex-col gap-10 py-12 px-8">
-        <h1 className="text-4xl font-bold tracking-tight dark:text-white">
-          FalconUp
-        </h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-4xl font-bold tracking-tight dark:text-white">
+            FalconUp
+          </h1>
+          {session && (
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                {session.user.name || session.user.email}
+              </span>
+              <button
+                onClick={async () => {
+                  await authClient.signOut();
+                  router.refresh();
+                }}
+                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              >
+                Sign Out
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Portfolio */}
         <section className="flex flex-col gap-4">
