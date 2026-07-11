@@ -24,6 +24,9 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Protect the main app page. Sign-in/sign-up and API routes are public.
-  matcher: ["/"],
+  // No routes require auth redirect for now — the main page is public
+  // and shows the portfolio section only when logged in. The backend
+  // returns 401 on /api/portfolio/* without a session cookie.
+  // Add protected routes here when needed (e.g. "/settings").
+  matcher: [],
 }

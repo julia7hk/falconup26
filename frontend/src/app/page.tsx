@@ -293,8 +293,12 @@ export default function Home() {
       .then((res) => res.json())
       .then(setCatalog)
       .catch(() => {});
-    fetchPortfolio();
   }, []);
+
+  // Fetch portfolio only when signed in
+  useEffect(() => {
+    if (session) fetchPortfolio();
+  }, [session]);
 
   async function fetchPortfolio() {
     try {
@@ -488,7 +492,7 @@ export default function Home() {
           <h1 className="text-4xl font-bold tracking-tight dark:text-white">
             FalconUp
           </h1>
-          {session && (
+          {session ? (
             <div className="flex items-center gap-3">
               <span className="text-sm text-zinc-500 dark:text-zinc-400">
                 {session.user.name || session.user.email}
@@ -503,11 +507,18 @@ export default function Home() {
                 Sign Out
               </button>
             </div>
+          ) : (
+            <a
+              href="/sign-in"
+              className="rounded-lg bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+            >
+              Sign In
+            </a>
           )}
         </div>
 
-        {/* Portfolio */}
-        <section className="flex flex-col gap-4">
+        {/* Portfolio — only visible when signed in */}
+        {session && <section className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold dark:text-zinc-200">
               My Portfolio
@@ -780,7 +791,7 @@ export default function Home() {
               </button>
             </div>
           ) : null}
-        </section>
+        </section>}
 
         {/* Symbol Catalog */}
         <section className="flex flex-col gap-6">
