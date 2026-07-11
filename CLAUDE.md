@@ -7,23 +7,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 FalconUp — portfolio intelligence platform for new/conservative investors. Per-symbol risk indicators (RSI, MACD, Bollinger, SMA crossover, ATR, beta, Sharpe) + portfolio-level risk analysis (concentration, correlation, effective leverage, stress scenarios) + structured LLM explainer layer (versioned prompts, output validation, deterministic fallback — no chatbot). See `docs/features.md` for the full feature ladder (V0–V2) and `docs/milestones.md` for sprint breakdown.
 
 Project motivation context:
-"i am a college student and i just got into investing. i dont really
-know what im doing so i want to create a web app that consolidates a
-lot of stock risk indicators, other tools, etc and tells me how my
-position is and what actions i should take (buy/sell/hold) and is
-also transparent about why it gave me that rating so i can learn and
-improve. im not a very risk-taking person so i dont invest in
-individual company stocks and own symbols like QQQ, SOXL, TQQQ, but
-I would be open to investing in individual company stocks if I was
-more educated and aware of what I was doing and had the confidence
-and evidence to put money into it."
+"i am a college student and i just got into investing. i dont really know what
+im doing so i want to create a web app that consolidates a lot of stock risk
+indicators, other tools, etc and tells me how my position is and what actions i
+should take (buy/sell/hold) and is also transparent about why it gave me that
+rating so i can learn and improve. im not a very risk-taking person so i dont
+invest in individual company stocks and own symbols like QQQ, SOXL, TQQQ, but I
+would be open to investing in individual company stocks if I was more educated
+and aware of what I was doing and had the confidence and evidence to put money
+into it."
 
 ## Structure
 
 - `backend/` — FastAPI + Python 3.13 (API, indicator engine, portfolio risk engine, LLM explainer)
 - `backend/market/` — market data abstraction layer (provider protocol, yfinance impl, FRED macro data, Redis cache)
 - `backend/indicators/` — per-symbol indicator engine (models.py, math.py, composite.py). Pure functions, no DB dependency.
-- `backend/routers/` — FastAPI route handlers (`symbols.py`, `macro.py`, `indicators.py`)
+- `backend/routers/` — FastAPI route handlers (`symbols.py`, `macro.py`, `indicators.py`, `portfolio.py`)
 - `backend/db.py` — SQLAlchemy async engine + session factory (asyncpg driver). Defers engine creation if `DATABASE_URL` is not set (safe for CI import).
 - `backend/scripts/` — one-off CLI scripts (`seed.py`, `backfill.py`)
 - `backend/llm/` — structured LLM layer (prompts/, context.py, validator.py, cache.py, client.py) — not yet implemented
@@ -84,18 +83,27 @@ docker compose --env-file ../.env down             # stop all services
 
 ### Deploy to oc40
 
-After merging to main:
+After merging to main (pulls pre-built images from GHCR):
 
 ```bash
 ssh ubuntu@oc40
 cd ~/_proj/falconup26
-git pull
+git pull                                          # needed for bare-metal scripts (alembic, seed, backfill)
 cd backend
 # Bare-metal scripts need localhost, not Docker bridge IP
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/falconup uv run alembic upgrade head
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/falconup uv run python -m scripts.seed
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/falconup uv run python -m scripts.backfill
 cd ../ops
+docker compose --env-file ../.env down
+docker compose --env-file ../.env pull            # pull latest images from ghcr.io
+docker compose --env-file ../.env up -d
+```
+
+Alternative: build on-server instead of pulling from GHCR (slower, but works without registry access):
+
+```bash
+cd ops
 docker compose -f compose.build.yaml down
 docker compose -f compose.build.yaml up --build -d
 ```
