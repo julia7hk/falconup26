@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from urllib.parse import unquote
+
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,9 +20,14 @@ async def get_current_user(
 
     Returns a dict with id, name, email. Raises 401 if no valid session.
     """
-    token = request.cookies.get("better-auth.session_token")
-    if not token:
+    raw = request.cookies.get("better-auth.session_token")
+    if not raw:
         raise HTTPException(status_code=401, detail="Not authenticated")
+
+    # Cookie value is URL-encoded and has a ".signature" suffix appended
+    # by Better Auth (e.g. "token.hmac_signature"). The DB stores only
+    # the token part before the dot.
+    token = unquote(raw).split(".")[0]
 
     result = await session.execute(
         text("""
