@@ -90,6 +90,92 @@ DB table exists (`portfolio_holding` from M3). This milestone adds the API + fro
 - [x] Buy/Hold/Sell badge per holding (from existing indicators endpoint)
 - [x] Empty state + onboarding — prompt to add first holding, suggest QQQ/TQQQ/SOXL as examples
 
+## Milestone 5.5: Production Deploy
+
+- [x] Deployed to oc40 (`falconup.julia7hk.com`) — Oracle Cloud free tier Ampere ARM64
+- [x] Postgres 16 + Redis on host (not in Docker)
+- [x] Nginx reverse proxy in Docker
+- [x] Cloudflare edge TLS (SSL mode: Full)
+- [x] CI/CD: GitHub Actions → GHCR → pull on oc40
+
+## Milestone 5.6: Authentication & Multi-Tenancy
+
+> **Status: NOT STARTED**
+>
+> The app is publicly deployed with zero authentication. Anyone who visits
+> `falconup.julia7hk.com` can view, add, edit, and delete portfolio holdings.
+> There is a single shared `portfolio_holding` table with no `user_id` —
+> everyone shares one portfolio.
+>
+> **Why this is the next priority:**
+>
+> 1. **Resume value** — auth touches every layer of the stack (DB migrations,
+>    backend middleware, API design, frontend state, cookies, security). It's
+>    one of the most asked-about topics in interviews, and building it from
+>    scratch (not just plugging in a library) demonstrates real understanding.
+> 2. **Security** — the app is live and anyone can modify portfolio data.
+> 3. **Multi-user foundation** — retrofitting `user_id` later is painful
+>    (migration on existing data, every query needs scoping, upsert logic
+>    changes). Doing it now means multi-user support is a natural extension,
+>    not a rewrite.
+> 4. **Project goals alignment** — primary goal is learning/resume, secondary
+>    is personal use, tertiary is multi-user/monetization. Auth serves all
+>    four at once.
+
+### Database
+
+- [ ] Alembic migration (hand-authored raw SQL, per project convention):
+  - `user` table: `id` (serial PK), `email` (unique, NOT NULL), `password_hash` (NOT NULL), `name`, `created_at` (default now()), `updated_at` (default now())
+  - Add `user_id` (NOT NULL FK → `user.id`) to `portfolio_holding`
+  - Drop existing UNIQUE on `portfolio_holding.symbol_id`
+  - Add UNIQUE on `(user_id, symbol_id)` — one holding per symbol *per user*
+
+### Backend (FastAPI)
+
+- [ ] Auth dependencies + utilities:
+  - Password hashing with bcrypt (`passlib[bcrypt]` or `bcrypt`)
+  - JWT creation + validation (PyJWT, HS256, short-lived access token)
+  - `get_current_user` dependency — extract + validate JWT from httpOnly cookie, return user row
+  - `JWT_SECRET` env var in `.env` / `.env.example`
+- [ ] Auth endpoints:
+  - `POST /api/auth/register` — validate email/password, hash password, insert user, return JWT in httpOnly cookie
+  - `POST /api/auth/login` — verify credentials, return JWT in httpOnly cookie
+  - `POST /api/auth/logout` — clear the httpOnly cookie
+  - `GET /api/auth/me` — return current user info (for frontend session check on page load)
+- [ ] Protect portfolio routes:
+  - All `/api/portfolio/*` routes get `Depends(get_current_user)`
+  - Every `portfolio_holding` query scoped by `user_id` (SELECT, INSERT, UPDATE, DELETE)
+  - Upsert conflict target changes from `(symbol_id)` to `(user_id, symbol_id)`
+
+### Frontend (Next.js)
+
+- [ ] Auth pages:
+  - `/login` page (email + password form)
+  - `/register` page (email + password + name form)
+- [ ] Auth state:
+  - Check `GET /api/auth/me` on app load to determine login state
+  - Redirect unauthenticated users to `/login`
+  - All `fetch` calls use `credentials: 'include'` for httpOnly cookie
+- [ ] Auth UI:
+  - Logout button in header (visible when logged in)
+  - User email/name display in header
+  - Protected route wrapper component
+
+### Security Decisions (and why — interview talking points)
+
+- **httpOnly cookies** over localStorage — XSS can't read the token via `document.cookie`. This is a deliberate, defensible choice.
+- **bcrypt** for password hashing — intentionally slow, resistant to brute force. Not MD5/SHA256.
+- **Short-lived JWT** — limits exposure window if a token leaks. Consider refresh token pattern for UX.
+- **Server-side validation on every request** — never trust the client. `get_current_user` runs on every protected route.
+- **SameSite=Lax + Secure** cookie flags — CSRF protection without a separate token.
+
+### Testing
+
+- [ ] pytest: register, login, logout, me endpoints (happy path + validation errors)
+- [ ] pytest: portfolio CRUD returns 401 without auth
+- [ ] pytest: user A cannot see/modify user B's holdings
+- [ ] Manual E2E: register → add holdings → logout → register as different user → see empty portfolio
+
 ## Milestone 6: Portfolio Risk Engine
 
 Depends on M5 (needs holdings to analyze).
