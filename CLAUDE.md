@@ -25,7 +25,7 @@ Project goals (priority order): learning & resume > personal use > multi-user > 
 
 **No authentication.** The app currently has zero auth. There is one shared `portfolio_holding` table with no `user_id` — anyone who visits the URL can view, add, edit, and delete holdings. All portfolio queries are unscoped.
 
-**Next milestone: Authentication & Multi-Tenancy (M5.6).** See `docs/milestones.md` for the full breakdown. Scope: `user` table + bcrypt + JWT in httpOnly cookies + `user_id` FK on `portfolio_holding` + auth middleware on all portfolio routes + login/register pages.
+**Next milestone: Authentication & Multi-Tenancy (M5.5).** See `docs/milestones.md` for the full breakdown. Implementation: Prisma (typed DB client for Next.js server-side code) + Better Auth (same library as kkulgag) with Prisma adapter + a session bridge in FastAPI that reads the shared session table to resolve `user_id`. Scope: Prisma setup + Better Auth tables + `user_id` FK on `portfolio_holding` + FastAPI `get_current_user` dependency + sign-in/sign-up pages + protected routes.
 
 ## Structure
 
@@ -38,7 +38,7 @@ Project goals (priority order): learning & resume > personal use > multi-user > 
 - `backend/llm/` — structured LLM layer (prompts/, context.py, validator.py, cache.py, client.py) — not yet implemented
 - `frontend/` — Next.js 16 (App Router) + React 19 + TypeScript + Tailwind 4. Symbol catalog browser, sparkline price charts, indicator panel (7 indicators + composite Buy/Hold/Sell signal), symbol lookup, macro snapshot.
 - `ops/` — Dockerfiles, Compose (`compose.build.yaml` for local dev, `compose.yaml` for production), nginx config
-- `docs/` — Features, milestones
+- `docs/` — Features, milestones, auth architecture
 - `kkulgag/` — Sibling project (Korean bulletin board aggregator), separate git repo on nc01 (not oc40). See `kkulgag/CLAUDE.md`.
 
 ## Dev Commands
@@ -122,7 +122,7 @@ docker compose -f compose.build.yaml up --build -d
 
 - **Backend:** FastAPI in `backend/`, managed by `uv` (Python 3.13)
 - **Frontend:** Next.js 16 (App Router, Turbopack) in `frontend/`, React 19, Tailwind 4
-- **DB:** Postgres 16 (hosted on oc40, not in Docker). Schema owned by Alembic migrations (hand-authored). 4 tables: `symbol`, `portfolio_holding`, `price_history`, `macro_history`. No ORM models — queries use raw SQL via `text()`.
+- **DB:** Postgres 16 (hosted on oc40, not in Docker). Schema owned by Alembic migrations (hand-authored). 4 tables: `symbol`, `portfolio_holding`, `price_history`, `macro_history`. Backend queries use raw SQL via `text()`. Prisma planned for frontend server-side DB access (M5.5 — Better Auth adapter + typed queries).
 - **Cache:** Redis (hosted on oc40, not in Docker). Used by `market/cache.py` for market data caching. `REDIS_URL` in `.env`. Tests use `fakeredis` (no running Redis needed).
 - **Reverse proxy:** Nginx in Docker (`ops/nginx/conf.d/falconup.conf`). Path-based routing on `falconup.julia7hk.com`: `/api/*` → backend, everything else → Next.js. Only nginx exposes a host port (`${WEB_PORT}:80`); frontend and backend are internal to the Docker network.
 - **TLS:** Cloudflare (edge termination). Domain `falconup.julia7hk.com` is proxied through Cloudflare; nginx listens on port 80. SSL mode: Full.
@@ -226,11 +226,12 @@ Postgres (price_history + macro_history)
 - **No containerized Postgres or Redis:** Both run on the host (oc40), not in Docker. Do not add `db` or `redis` services to Docker Compose. The backend container reaches them via the Docker bridge gateway IP.
 - **PGHOST in Docker vs bare metal:** oc40's `.env` has `PGHOST=172.17.0.1` (Docker bridge gateway) for containers. Bare-metal commands (alembic, seed, backfill) need `localhost` — override with `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/falconup`. On Mac (Docker Desktop) use `PGHOST=host.docker.internal`.
 - **REDIS_URL in Docker:** Same issue as PGHOST. On oc40: `REDIS_URL=redis://172.17.0.1:6379/0`. Redis `bind` config must include `172.17.0.1` (or `0.0.0.0`) and `protected-mode` should be `no` (or set a password).
+- **DATABASE_URL for Prisma (frontend):** Same PGHOST pitfall as the backend. On oc40: `DATABASE_URL=postgresql://postgres:postgres@172.17.0.1:5432/falconup` (Docker bridge IP). Local dev on Mac: `host.docker.internal`. Bare-metal commands (`prisma db pull`, `prisma generate`): `localhost`.
 - **NEXT_PUBLIC_* vars are build-time:** Next.js inlines `NEXT_PUBLIC_*` env vars into the JS bundle during `npm run build`. They must be passed as Docker build args (`ARG`/`ENV` in Dockerfile), not just runtime env vars. Changing them requires a rebuild.
 - **db.py import safety:** `db.py` defers engine creation when `DATABASE_URL` is missing. This allows CI tests to import the app without a database. The error only fires at runtime when `get_session()` is called.
 - **FRED date strings:** `FredProvider.get_series_history()` returns dates as ISO strings, not `date` objects. When inserting into Postgres via asyncpg, convert with `date.fromisoformat()` first.
 - **React component definitions:** Do not define React components inside other components — Next.js 16 ESLint will flag this and it causes state reset on every render. Define them at module scope.
-- **No authentication:** All API endpoints are publicly accessible. All portfolio data is shared across all visitors. Do not add features that assume user isolation until M5.6 (auth) is complete. When building auth, use httpOnly cookies for JWT storage (not localStorage), and scope every `portfolio_holding` query by `user_id`.
+- **No authentication:** All API endpoints are publicly accessible. All portfolio data is shared across all visitors. Do not add features that assume user isolation until M5.6 (auth) is complete. Auth uses Better Auth (Next.js side) + a session bridge in FastAPI that reads the `better-auth.session_token` cookie and looks up the shared `session` table. Scope every `portfolio_holding` query by `user_id`.
 
 ## Ideas Under Consideration
 

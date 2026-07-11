@@ -90,91 +90,54 @@ DB table exists (`portfolio_holding` from M3). This milestone adds the API + fro
 - [x] Buy/Hold/Sell badge per holding (from existing indicators endpoint)
 - [x] Empty state + onboarding — prompt to add first holding, suggest QQQ/TQQQ/SOXL as examples
 
-## Milestone 5.5: Production Deploy
+## Milestone 5.5: Authentication & Multi-Tenancy
 
-- [x] Deployed to oc40 (`falconup.julia7hk.com`) — Oracle Cloud free tier Ampere ARM64
-- [x] Postgres 16 + Redis on host (not in Docker)
-- [x] Nginx reverse proxy in Docker
-- [x] Cloudflare edge TLS (SSL mode: Full)
-- [x] CI/CD: GitHub Actions → GHCR → pull on oc40
+Better Auth + FastAPI session bridge. See [auth.md](auth.md) for architecture and conceptual background.
 
-## Milestone 5.6: Authentication & Multi-Tenancy
+### 1. Database
 
-> **Status: NOT STARTED**
->
-> The app is publicly deployed with zero authentication. Anyone who visits
-> `falconup.julia7hk.com` can view, add, edit, and delete portfolio holdings.
-> There is a single shared `portfolio_holding` table with no `user_id` —
-> everyone shares one portfolio.
->
-> **Why this is the next priority:**
->
-> 1. **Resume value** — auth touches every layer of the stack (DB migrations,
->    backend middleware, API design, frontend state, cookies, security). It's
->    one of the most asked-about topics in interviews, and building it from
->    scratch (not just plugging in a library) demonstrates real understanding.
-> 2. **Security** — the app is live and anyone can modify portfolio data.
-> 3. **Multi-user foundation** — retrofitting `user_id` later is painful
->    (migration on existing data, every query needs scoping, upsert logic
->    changes). Doing it now means multi-user support is a natural extension,
->    not a rewrite.
-> 4. **Project goals alignment** — primary goal is learning/resume, secondary
->    is personal use, tertiary is multi-user/monetization. Auth serves all
->    four at once.
+- [ ] Alembic migration: Better Auth tables (`"user"`, `session`, `account`, `verification` — camelCase columns)
+- [ ] Alembic migration: truncate `portfolio_holding` (existing data is test), add `user_id` (text, NOT NULL, FK → `"user".id`), drop UNIQUE on `symbol_id`, add UNIQUE on `(user_id, symbol_id)`
 
-### Database
+### 2. Frontend — Prisma
 
-- [ ] Alembic migration (hand-authored raw SQL, per project convention):
-  - `user` table: `id` (serial PK), `email` (unique, NOT NULL), `password_hash` (NOT NULL), `name`, `created_at` (default now()), `updated_at` (default now())
-  - Add `user_id` (NOT NULL FK → `user.id`) to `portfolio_holding`
-  - Drop existing UNIQUE on `portfolio_holding.symbol_id`
-  - Add UNIQUE on `(user_id, symbol_id)` — one holding per symbol *per user*
+Requires: migration applied so all tables exist for introspection.
 
-### Backend (FastAPI)
+- [ ] `npx prisma init` — initialize Prisma in `frontend/`
+- [ ] Add `DATABASE_URL` to `frontend/.env` (localhost for dev, Docker bridge IP for containers — same pitfall as backend)
+- [ ] `npx prisma db pull` — introspect Postgres schema into `prisma/schema.prisma`
+- [ ] `npx prisma generate` — generate typed Prisma client
+- [ ] Prisma client singleton (`lib/db.ts`)
 
-- [ ] Auth dependencies + utilities:
-  - Password hashing with bcrypt (`passlib[bcrypt]` or `bcrypt`)
-  - JWT creation + validation (PyJWT, HS256, short-lived access token)
-  - `get_current_user` dependency — extract + validate JWT from httpOnly cookie, return user row
-  - `JWT_SECRET` env var in `.env` / `.env.example`
-- [ ] Auth endpoints:
-  - `POST /api/auth/register` — validate email/password, hash password, insert user, return JWT in httpOnly cookie
-  - `POST /api/auth/login` — verify credentials, return JWT in httpOnly cookie
-  - `POST /api/auth/logout` — clear the httpOnly cookie
-  - `GET /api/auth/me` — return current user info (for frontend session check on page load)
-- [ ] Protect portfolio routes:
-  - All `/api/portfolio/*` routes get `Depends(get_current_user)`
-  - Every `portfolio_holding` query scoped by `user_id` (SELECT, INSERT, UPDATE, DELETE)
-  - Upsert conflict target changes from `(symbol_id)` to `(user_id, symbol_id)`
+### 3. Frontend — Better Auth
 
-### Frontend (Next.js)
+Requires: Prisma client working.
 
-- [ ] Auth pages:
-  - `/login` page (email + password form)
-  - `/register` page (email + password + name form)
-- [ ] Auth state:
-  - Check `GET /api/auth/me` on app load to determine login state
-  - Redirect unauthenticated users to `/login`
-  - All `fetch` calls use `credentials: 'include'` for httpOnly cookie
-- [ ] Auth UI:
-  - Logout button in header (visible when logged in)
-  - User email/name display in header
-  - Protected route wrapper component
+- [ ] `npm install better-auth`
+- [ ] Auth server config (`lib/auth.ts`) — Prisma adapter, email/password, admin plugin
+- [ ] Auth client (`lib/auth-client.ts`) — `createAuthClient()`
+- [ ] Catchall route (`/api/auth/[...all]/route.ts`)
+- [ ] `BETTER_AUTH_SECRET` env var (add to `.env`, `.env.example`, Docker build args)
+- [ ] `/sign-in` page
+- [ ] `/sign-up` page
+- [ ] `authClient.useSession()` hook for session state
+- [ ] Middleware (`middleware.ts`) — redirect unauthenticated users to `/sign-in` (protect `/` and portfolio routes; `/api/symbols/*`, `/api/macro/*` stay public)
+- [ ] Header: user name + sign-out button (logged in) / sign-in link (logged out)
 
-### Security Decisions (and why — interview talking points)
+### 4. Backend (FastAPI) — session bridge
 
-- **httpOnly cookies** over localStorage — XSS can't read the token via `document.cookie`. This is a deliberate, defensible choice.
-- **bcrypt** for password hashing — intentionally slow, resistant to brute force. Not MD5/SHA256.
-- **Short-lived JWT** — limits exposure window if a token leaks. Consider refresh token pattern for UX.
-- **Server-side validation on every request** — never trust the client. `get_current_user` runs on every protected route.
-- **SameSite=Lax + Secure** cookie flags — CSRF protection without a separate token.
+Requires: Better Auth working (sessions exist in DB to look up).
 
-### Testing
+- [ ] `get_current_user` dependency — read `better-auth.session_token` cookie, look up session in DB, resolve user
+- [ ] All `/api/portfolio/*` routes get `Depends(get_current_user)` (`/api/symbols/*` and `/api/macro/*` stay public)
+- [ ] All `portfolio_holding` queries scoped by `user_id`
+- [ ] Upsert conflict target: `(symbol_id)` → `(user_id, symbol_id)`
 
-- [ ] pytest: register, login, logout, me endpoints (happy path + validation errors)
-- [ ] pytest: portfolio CRUD returns 401 without auth
+### 5. Testing
+
+- [ ] pytest: portfolio CRUD returns 401 without session cookie
 - [ ] pytest: user A cannot see/modify user B's holdings
-- [ ] Manual E2E: register → add holdings → logout → register as different user → see empty portfolio
+- [ ] Manual E2E: register → add holdings → sign out → register new user → see empty portfolio
 
 ## Milestone 6: Portfolio Risk Engine
 

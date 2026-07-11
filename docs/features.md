@@ -52,13 +52,15 @@ Status reflects what's shipped to prod. See
 > Building it now also serves the primary project goal (learning/resume)
 > and lays the foundation for multi-user support.
 
-- [ ] User registration + login — email/password, bcrypt hashing, JWT in
-      httpOnly cookies (not localStorage — deliberate security choice)
+- [ ] Prisma — typed database client for Next.js server-side code,
+      used as Better Auth's adapter and available for future server components
+- [ ] User registration + login — Better Auth (email/password), session
+      token in httpOnly cookie, bcrypt password hashing under the hood
 - [ ] Per-user portfolio isolation — `user_id` FK on `portfolio_holding`,
       every query scoped to the authenticated user
-- [ ] Protected routes — unauthenticated users redirected to login
-- [ ] Session management — `/api/auth/me` check on page load, logout
-      clears cookie
+- [ ] Protected routes — unauthenticated users redirected to /sign-in
+- [ ] Session bridge — FastAPI reads Better Auth's session cookie and
+      looks up the shared session table in Postgres to resolve user_id
 
 ## V0.6 — "make it sticky"
 
