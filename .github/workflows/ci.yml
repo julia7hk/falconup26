@@ -115,6 +115,8 @@ jobs:
           file: ops/Dockerfile.frontend
           platforms: linux/amd64,linux/arm64
           push: true
+          # NEXT_PUBLIC_* are empty at CI build time. The production
+          # compose.yaml injects real values at runtime via env_file.
           build-args: |
             NEXT_PUBLIC_FASTAPI_SERVER=
             NEXT_PUBLIC_BETTER_AUTH_URL=
