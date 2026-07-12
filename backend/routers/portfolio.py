@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from auth import get_current_user
 from db import get_session
 from market import get_price_fetcher
 
@@ -32,15 +33,17 @@ class HoldingUpdate(BaseModel):
 # ---------- helpers ----------
 
 
-async def _get_holding_or_404(session: AsyncSession, holding_id: int) -> dict:
+async def _get_holding_or_404(
+    session: AsyncSession, holding_id: int, user_id: str
+) -> dict:
     result = await session.execute(
         text("""
             SELECT ph.id, s.ticker, s.name, ph.shares, ph.avg_cost, ph.created_at
             FROM portfolio_holding ph
             JOIN symbol s ON s.id = ph.symbol_id
-            WHERE ph.id = :id
+            WHERE ph.id = :id AND ph.user_id = :user_id
         """),
-        {"id": holding_id},
+        {"id": holding_id, "user_id": user_id},
     )
     row = result.fetchone()
     if not row:
@@ -59,7 +62,11 @@ async def _get_holding_or_404(session: AsyncSession, holding_id: int) -> dict:
 
 
 @router.post("/holdings", status_code=201)
-async def add_holding(body: HoldingCreate, session: AsyncSession = Depends(get_session)):
+async def add_holding(
+    body: HoldingCreate,
+    user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
     """Add a holding to the portfolio."""
     ticker = body.ticker.upper()
 
@@ -75,9 +82,9 @@ async def add_holding(body: HoldingCreate, session: AsyncSession = Depends(get_s
     # Upsert: merge into existing holding with weighted average cost
     result = await session.execute(
         text("""
-            INSERT INTO portfolio_holding (symbol_id, shares, avg_cost)
-            VALUES (:symbol_id, :shares, :avg_cost)
-            ON CONFLICT (symbol_id) DO UPDATE SET
+            INSERT INTO portfolio_holding (symbol_id, shares, avg_cost, user_id)
+            VALUES (:symbol_id, :shares, :avg_cost, :user_id)
+            ON CONFLICT (user_id, symbol_id) DO UPDATE SET
                 avg_cost = (
                     portfolio_holding.avg_cost * portfolio_holding.shares
                     + EXCLUDED.avg_cost * EXCLUDED.shares
@@ -86,24 +93,36 @@ async def add_holding(body: HoldingCreate, session: AsyncSession = Depends(get_s
                 updated_at = now()
             RETURNING id
         """),
-        {"symbol_id": symbol_row.id, "shares": body.shares, "avg_cost": body.avg_cost},
+        {
+            "symbol_id": symbol_row.id,
+            "shares": body.shares,
+            "avg_cost": body.avg_cost,
+            "user_id": user["id"],
+        },
     )
     holding_id = result.scalar()
     await session.commit()
 
-    return await _get_holding_or_404(session, holding_id)
+    return await _get_holding_or_404(session, holding_id, user["id"])
 
 
 @router.get("")
-async def get_portfolio(session: AsyncSession = Depends(get_session)):
+async def get_portfolio(
+    user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
     """All holdings with live prices and P&L."""
-    result = await session.execute(text("""
-        SELECT ph.id, s.ticker, s.name, s.type, s.sector, s.leverage_factor,
-               ph.shares, ph.avg_cost
-        FROM portfolio_holding ph
-        JOIN symbol s ON s.id = ph.symbol_id
-        ORDER BY s.ticker
-    """))
+    result = await session.execute(
+        text("""
+            SELECT ph.id, s.ticker, s.name, s.type, s.sector, s.leverage_factor,
+                   ph.shares, ph.avg_cost
+            FROM portfolio_holding ph
+            JOIN symbol s ON s.id = ph.symbol_id
+            WHERE ph.user_id = :user_id
+            ORDER BY s.ticker
+        """),
+        {"user_id": user["id"]},
+    )
     rows = result.fetchall()
 
     if not rows:
@@ -187,17 +206,18 @@ async def get_portfolio(session: AsyncSession = Depends(get_session)):
 async def update_holding(
     holding_id: int,
     body: HoldingUpdate,
+    user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
     """Update shares and/or avg_cost for a holding."""
-    # Verify it exists
-    await _get_holding_or_404(session, holding_id)
+    # Verify it exists and belongs to this user
+    await _get_holding_or_404(session, holding_id, user["id"])
 
     if body.shares is None and body.avg_cost is None:
         raise HTTPException(status_code=400, detail="Nothing to update")
 
     sets = []
-    params: dict = {"id": holding_id}
+    params: dict = {"id": holding_id, "user_id": user["id"]}
     if body.shares is not None:
         sets.append("shares = :shares")
         params["shares"] = body.shares
@@ -207,23 +227,26 @@ async def update_holding(
     sets.append("updated_at = now()")
 
     await session.execute(
-        text(f"UPDATE portfolio_holding SET {', '.join(sets)} WHERE id = :id"),
+        text(
+            f"UPDATE portfolio_holding SET {', '.join(sets)} WHERE id = :id AND user_id = :user_id"
+        ),
         params,
     )
     await session.commit()
 
-    return await _get_holding_or_404(session, holding_id)
+    return await _get_holding_or_404(session, holding_id, user["id"])
 
 
 @router.delete("/holdings/{holding_id}", status_code=204)
 async def delete_holding(
     holding_id: int,
+    user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
     """Remove a holding from the portfolio."""
-    await _get_holding_or_404(session, holding_id)
+    await _get_holding_or_404(session, holding_id, user["id"])
     await session.execute(
-        text("DELETE FROM portfolio_holding WHERE id = :id"),
-        {"id": holding_id},
+        text("DELETE FROM portfolio_holding WHERE id = :id AND user_id = :user_id"),
+        {"id": holding_id, "user_id": user["id"]},
     )
     await session.commit()

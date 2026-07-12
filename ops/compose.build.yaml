@@ -35,6 +35,7 @@ services:
       dockerfile: ../ops/Dockerfile.frontend
       args:
         - NEXT_PUBLIC_FASTAPI_SERVER=${NEXT_PUBLIC_FASTAPI_SERVER}
+        - NEXT_PUBLIC_BETTER_AUTH_URL=${NEXT_PUBLIC_BETTER_AUTH_URL}
     restart: unless-stopped
     env_file:
       - ../.env
