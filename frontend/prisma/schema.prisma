@@ -1,0 +1,127 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime? @db.Timestamptz(6)
+  refreshTokenExpiresAt DateTime? @db.Timestamptz(6)
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime  @db.Timestamptz(6)
+  user                  user      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId], map: "ix_account_userId")
+}
+
+model alembic_version {
+  version_num String @id(map: "alembic_version_pkc") @db.VarChar(32)
+}
+
+model macro_history {
+  id     Int      @id @default(autoincrement())
+  series String
+  date   DateTime @db.Date
+  value  Decimal  @db.Decimal
+
+  @@unique([series, date], map: "uq_macro_history_series_date")
+  @@index([series, date], map: "ix_macro_history_series_date")
+}
+
+model portfolio_holding {
+  id         Int      @id @default(autoincrement())
+  symbol_id  Int
+  shares     Decimal  @db.Decimal
+  avg_cost   Decimal  @db.Decimal
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  user_id    String
+  symbol     symbol   @relation(fields: [symbol_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user       user     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, symbol_id])
+}
+
+model price_history {
+  id        Int      @id @default(autoincrement())
+  symbol_id Int
+  date      DateTime @db.Date
+  open      Decimal  @db.Decimal
+  high      Decimal  @db.Decimal
+  low       Decimal  @db.Decimal
+  close     Decimal  @db.Decimal
+  volume    BigInt
+  symbol    symbol   @relation(fields: [symbol_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([symbol_id, date], map: "uq_price_history_symbol_date")
+  @@index([symbol_id, date], map: "ix_price_history_symbol_date")
+}
+
+model session {
+  id             String   @id
+  expiresAt      DateTime @db.Timestamptz(6)
+  token          String   @unique
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime @db.Timestamptz(6)
+  ipAddress      String?
+  userAgent      String?
+  userId         String
+  impersonatedBy String?
+  user           user     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId], map: "ix_session_userId")
+}
+
+model symbol {
+  id                Int                 @id @default(autoincrement())
+  ticker            String              @unique
+  name              String?
+  type              String
+  sector            String?
+  industry          String?
+  leverage_factor   Decimal             @default(1) @db.Decimal
+  created_at        DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime            @default(now()) @db.Timestamptz(6)
+  portfolio_holding portfolio_holding[]
+  price_history     price_history[]
+}
+
+model user {
+  id                String              @id
+  name              String
+  email             String              @unique
+  emailVerified     Boolean             @default(false)
+  image             String?
+  createdAt         DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime            @db.Timestamptz(6)
+  role              String?
+  banned            Boolean?            @default(false)
+  banReason         String?
+  banExpires        DateTime?           @db.Timestamptz(6)
+  account           account[]
+  portfolio_holding portfolio_holding[]
+  session           session[]
+}
+
+model verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime @db.Timestamptz(6)
+
+  @@index([identifier], map: "ix_verification_identifier")
+}

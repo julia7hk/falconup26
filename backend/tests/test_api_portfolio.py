@@ -9,11 +9,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from auth import get_current_user
 from db import get_session
 from main import app
 from market.fetcher import PriceFetcher
 from market.models import Quote
 from tests.test_fetcher import FakeProvider
+
+FAKE_USER = {"id": "test-user-1", "name": "Test User", "email": "test@test.com"}
 
 client = TestClient(app)
 
@@ -126,11 +129,20 @@ def _mock_session_for_delete(exists: bool = True):
     return session
 
 
+# ---- helpers ----
+
+
+def _override_auth():
+    """Override get_current_user to return a fake user for testing."""
+    app.dependency_overrides[get_current_user] = lambda: FAKE_USER
+
+
 # ---- tests ----
 
 
 class TestAddHolding:
     def _override(self, session):
+        _override_auth()
         async def _gen():
             yield session
         app.dependency_overrides[get_session] = _gen
@@ -176,6 +188,7 @@ class TestGetPortfolio:
 
     @patch("routers.portfolio.get_price_fetcher", _patched_fetcher)
     def test_get_portfolio_with_holdings(self):
+        _override_auth()
         async def _gen():
             yield _mock_session_for_list()
         app.dependency_overrides[get_session] = _gen
@@ -192,6 +205,7 @@ class TestGetPortfolio:
         assert "total_value" in data
 
     def test_get_empty_portfolio(self):
+        _override_auth()
         async def _gen():
             yield _mock_session_for_list(rows=[])
         app.dependency_overrides[get_session] = _gen
@@ -205,6 +219,7 @@ class TestGetPortfolio:
 
     @patch("routers.portfolio.get_price_fetcher", _patched_fetcher)
     def test_get_portfolio_prices_complete(self):
+        _override_auth()
         async def _gen():
             yield _mock_session_for_list()
         app.dependency_overrides[get_session] = _gen
@@ -215,6 +230,7 @@ class TestGetPortfolio:
 
     def test_get_portfolio_quote_failure_excludes_cost_from_totals(self):
         """When a quote fails, that holding's cost is excluded from totals."""
+        _override_auth()
         def _failing_fetcher():
             provider = MagicMock()
             provider.get_quote.side_effect = RuntimeError("rate limited")
@@ -240,6 +256,7 @@ class TestGetPortfolio:
 
     def test_get_portfolio_partial_quotes(self):
         """With 2 holdings and 1 quote failure, totals reflect only the priced holding."""
+        _override_auth()
         row2 = PortfolioRow(
             id=2, ticker="SPY", name="SPDR S&P 500", type="etf",
             sector="Broad Market", leverage_factor=1, shares=5, avg_cost=500.0,
@@ -284,6 +301,7 @@ class TestAddHoldingMerge:
 
     def test_add_duplicate_merges(self):
         """Adding same symbol twice should upsert (weighted avg cost)."""
+        _override_auth()
         session = AsyncMock()
         call_count = 0
 
@@ -327,6 +345,7 @@ class TestUpdateHolding:
         app.dependency_overrides.clear()
 
     def test_update_shares(self):
+        _override_auth()
         async def _gen():
             yield _mock_session_for_update()
         app.dependency_overrides[get_session] = _gen
@@ -336,6 +355,7 @@ class TestUpdateHolding:
         assert resp.json()["shares"] == 20
 
     def test_update_nothing(self):
+        _override_auth()
         async def _gen():
             yield _mock_session_for_update()
         app.dependency_overrides[get_session] = _gen
@@ -349,6 +369,7 @@ class TestDeleteHolding:
         app.dependency_overrides.clear()
 
     def test_delete_success(self):
+        _override_auth()
         async def _gen():
             yield _mock_session_for_delete(exists=True)
         app.dependency_overrides[get_session] = _gen
@@ -357,6 +378,7 @@ class TestDeleteHolding:
         assert resp.status_code == 204
 
     def test_delete_not_found(self):
+        _override_auth()
         async def _gen():
             yield _mock_session_for_delete(exists=False)
         app.dependency_overrides[get_session] = _gen
