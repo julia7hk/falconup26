@@ -19,13 +19,11 @@ into it."
 
 Project goals (priority order): learning & resume > personal use > multi-user > monetization. The app is deployed at `falconup.julia7hk.com` on oc40.
 
-## Current Status & Next Priority
+## Current Status
 
-**Deployed** at `falconup.julia7hk.com` (oc40, Oracle Cloud Ampere ARM64). M1–M5 complete: project foundation, data sources, database, indicator engine, portfolio CRUD + frontend.
+**Deployed** at `falconup.julia7hk.com` (oc40, Oracle Cloud Ampere ARM64). M1–M5.5 complete: project foundation, data sources, database, indicator engine, portfolio CRUD + frontend, auth + multi-tenancy.
 
-**No authentication.** The app currently has zero auth. There is one shared `portfolio_holding` table with no `user_id` — anyone who visits the URL can view, add, edit, and delete holdings. All portfolio queries are unscoped.
-
-**Next milestone: Authentication & Multi-Tenancy (M5.5).** See `docs/milestones.md` for the full breakdown. Implementation: Prisma (typed DB client for Next.js server-side code) + Better Auth (same library as kkulgag) with Prisma adapter + a session bridge in FastAPI that reads the shared session table to resolve `user_id`. Scope: Prisma setup + Better Auth tables + `user_id` FK on `portfolio_holding` + FastAPI `get_current_user` dependency + sign-in/sign-up pages + protected routes.
+**Authentication is live.** Better Auth (Next.js) + FastAPI session bridge. Each user has their own portfolio. Public endpoints (`/api/symbols/*`, `/api/macro/*`) don't require auth. Portfolio endpoints (`/api/portfolio/*`) return 401 without a valid session. The main page is public — symbol catalog, indicators, lookup, and macro are visible without signing in; portfolio section only appears when logged in. See `docs/auth.md` for architecture.
 
 ## Structure
 
@@ -33,10 +31,13 @@ Project goals (priority order): learning & resume > personal use > multi-user > 
 - `backend/market/` — market data abstraction layer (provider protocol, yfinance impl, FRED macro data, Redis cache)
 - `backend/indicators/` — per-symbol indicator engine (models.py, math.py, composite.py). Pure functions, no DB dependency.
 - `backend/routers/` — FastAPI route handlers (`symbols.py`, `macro.py`, `indicators.py`, `portfolio.py`)
+- `backend/auth.py` — `get_current_user` FastAPI dependency. Reads Better Auth session cookie, looks up shared `session` table in Postgres, returns user dict or 401.
 - `backend/db.py` — SQLAlchemy async engine + session factory (asyncpg driver). Defers engine creation if `DATABASE_URL` is not set (safe for CI import).
 - `backend/scripts/` — one-off CLI scripts (`seed.py`, `backfill.py`)
 - `backend/llm/` — structured LLM layer (prompts/, context.py, validator.py, cache.py, client.py) — not yet implemented
-- `frontend/` — Next.js 16 (App Router) + React 19 + TypeScript + Tailwind 4. Symbol catalog browser, sparkline price charts, indicator panel (7 indicators + composite Buy/Hold/Sell signal), symbol lookup, macro snapshot.
+- `frontend/` — Next.js 16 (App Router) + React 19 + TypeScript + Tailwind 4. Symbol catalog, sparkline charts, indicator panel, symbol lookup, macro snapshot, portfolio management (auth-gated).
+- `frontend/src/lib/` — Prisma client (`db.ts`), Better Auth server config (`auth.ts`), Better Auth client (`auth-client.ts`)
+- `frontend/prisma/` — Prisma schema (introspected from DB, not hand-authored). Regenerate with `npx prisma db pull`.
 - `ops/` — Dockerfiles, Compose (`compose.build.yaml` for local dev, `compose.yaml` for production), nginx config
 - `docs/` — Features, milestones, auth architecture
 - `kkulgag/` — Sibling project (Korean bulletin board aggregator), separate git repo on nc01 (not oc40). See `kkulgag/CLAUDE.md`.
@@ -59,6 +60,8 @@ uv add --dev <package>                            # add a dev dependency
 
 ```bash
 npm install                                       # install deps
+npx prisma db pull                                # introspect DB schema into prisma/schema.prisma
+npx prisma generate                               # generate typed Prisma client (required before build)
 npm run dev                                       # dev server on port 4040
 npm run build                                     # production build
 npm run lint                                      # ESLint
@@ -122,13 +125,14 @@ docker compose -f compose.build.yaml up --build -d
 
 - **Backend:** FastAPI in `backend/`, managed by `uv` (Python 3.13)
 - **Frontend:** Next.js 16 (App Router, Turbopack) in `frontend/`, React 19, Tailwind 4
-- **DB:** Postgres 16 (hosted on oc40, not in Docker). Schema owned by Alembic migrations (hand-authored). 4 tables: `symbol`, `portfolio_holding`, `price_history`, `macro_history`. Backend queries use raw SQL via `text()`. Prisma planned for frontend server-side DB access (M5.5 — Better Auth adapter + typed queries).
+- **Auth:** Better Auth (Next.js side) for registration/login/session management + Prisma adapter. FastAPI reads the shared `session` table via a session bridge (`backend/auth.py`). See `docs/auth.md`.
+- **DB:** Postgres 16 (hosted on oc40, not in Docker). Schema owned by Alembic migrations (hand-authored). 8 tables: `symbol`, `portfolio_holding` (scoped by `user_id`), `price_history`, `macro_history`, plus Better Auth tables (`user`, `session`, `account`, `verification` — camelCase columns). Backend queries use raw SQL via `text()`. Frontend uses Prisma for server-side DB access (Better Auth adapter + typed queries).
 - **Cache:** Redis (hosted on oc40, not in Docker). Used by `market/cache.py` for market data caching. `REDIS_URL` in `.env`. Tests use `fakeredis` (no running Redis needed).
-- **Reverse proxy:** Nginx in Docker (`ops/nginx/conf.d/falconup.conf`). Path-based routing on `falconup.julia7hk.com`: `/api/*` → backend, everything else → Next.js. Only nginx exposes a host port (`${WEB_PORT}:80`); frontend and backend are internal to the Docker network.
+- **Reverse proxy:** Nginx in Docker (`ops/nginx/conf.d/falconup.conf`). Path-based routing on `falconup.julia7hk.com`: `/api/auth/*` → Next.js (Better Auth), `/api/*` → FastAPI, everything else → Next.js. All locations set `X-Forwarded-Proto: https` (Cloudflare terminates TLS). Only nginx exposes a host port (`${WEB_PORT}:80`); frontend and backend are internal to the Docker network.
 - **TLS:** Cloudflare (edge termination). Domain `falconup.julia7hk.com` is proxied through Cloudflare; nginx listens on port 80. SSL mode: Full.
 - **Infra:** Docker Compose in `ops/` — three services: `nginx`, `backend`, `frontend`. Postgres and Redis run on the host (oc40), not in containers. Compose project name: `falconup-40`. Server: Oracle Cloud free tier Ampere ARM64 instance (`ssh ubuntu@oc40`).
 - **CI/CD:** GitHub Actions → build + push to GHCR. Images: `ghcr.io/julia7hk/falconup26/backend`, `ghcr.io/julia7hk/falconup26/frontend`. Deploy: pull on oc40 or build directly on oc40 with `compose.build.yaml`.
-- **Environment:** direnv + `.env` (see `.env.example` for all variables)
+- **Environment:** direnv + `.env` (see `.env.example` for all variables). Key auth vars: `BETTER_AUTH_SECRET` (random 32-byte base64), `NEXT_PUBLIC_BETTER_AUTH_URL` (points to frontend origin).
 
 ## Architecture
 
@@ -169,12 +173,15 @@ scripts/backfill.py                   → pull 5yr OHLCV + FRED history into Pos
 
 Tables:
 - `symbol` — ticker (unique), name, type (etf/stock), sector, industry, leverage_factor, timestamps
-- `portfolio_holding` — symbol_id FK, shares, avg_cost, timestamps. **No `user_id` yet — single shared portfolio, no auth.** UNIQUE on `symbol_id` (will change to `(user_id, symbol_id)` in M5.6).
+- `portfolio_holding` — user_id FK (text), symbol_id FK, shares, avg_cost, timestamps. UNIQUE on `(user_id, symbol_id)`.
 - `price_history` — symbol_id FK, date, OHLCV, volume. Indexed + unique on (symbol_id, date)
 - `macro_history` — series name, date, value. Indexed + unique on (series, date)
+- `user` — Better Auth. text PK, name, email (unique), emailVerified, image, role, banned, timestamps. camelCase columns.
+- `session` — Better Auth. token (unique), userId FK → user (CASCADE), expiresAt. Indexed on userId.
+- `account` — Better Auth. Provider credentials (password, OAuth tokens). userId FK → user (CASCADE).
+- `verification` — Better Auth. Email verification tokens.
 
 Future tables:
-- `user` — M5.6 (auth): email, password_hash, name, timestamps
 - `indicator_snapshot` — M9 (data pipeline)
 - `portfolio_risk_snapshot` — M6
 - `llm_analysis_cache` — M8
@@ -231,7 +238,10 @@ Postgres (price_history + macro_history)
 - **db.py import safety:** `db.py` defers engine creation when `DATABASE_URL` is missing. This allows CI tests to import the app without a database. The error only fires at runtime when `get_session()` is called.
 - **FRED date strings:** `FredProvider.get_series_history()` returns dates as ISO strings, not `date` objects. When inserting into Postgres via asyncpg, convert with `date.fromisoformat()` first.
 - **React component definitions:** Do not define React components inside other components — Next.js 16 ESLint will flag this and it causes state reset on every render. Define them at module scope.
-- **No authentication:** All API endpoints are publicly accessible. All portfolio data is shared across all visitors. Do not add features that assume user isolation until M5.6 (auth) is complete. Auth uses Better Auth (Next.js side) + a session bridge in FastAPI that reads the `better-auth.session_token` cookie and looks up the shared `session` table. Scope every `portfolio_holding` query by `user_id`.
+- **Auth cookie name varies by protocol:** In production (HTTPS), Better Auth prefixes the cookie with `__Secure-` → `__Secure-better-auth.session_token`. In local dev (HTTP), it's just `better-auth.session_token`. The session bridge in `auth.py` checks both. If auth works locally but fails in prod (401 on every portfolio request), this is likely the cause.
+- **Prisma generate required before frontend build:** `npx prisma generate` must run before `npm run build`. The Dockerfile does this automatically. CI does it as a separate step. Forgetting it locally causes import errors for `@/generated/prisma/client`.
+- **Next.js rewrite excludes /api/auth/:** `next.config.ts` rewrites `/api/*` to FastAPI, but excludes `/api/auth/*` so Better Auth's catchall route handler works. If a new `/api/auth/*` endpoint is added to FastAPI, it won't be reachable.
+- **Better Auth tables use camelCase:** The `user`, `session`, `account`, `verification` tables have camelCase column names (e.g. `userId`, `expiresAt`) to match Better Auth's Prisma adapter. The rest of the schema uses snake_case.
 
 ## Ideas Under Consideration
 

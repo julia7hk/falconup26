@@ -487,9 +487,9 @@ export default function Home() {
 
   return (
     <div className="flex flex-col flex-1 items-center bg-zinc-50 font-sans dark:bg-zinc-950">
-      <main className="flex flex-1 w-full max-w-6xl flex-col gap-10 py-12 px-8">
+      <main className="flex flex-1 w-full max-w-6xl flex-col gap-10 py-8 px-4 sm:py-12 sm:px-8">
         <div className="flex items-center justify-between">
-          <h1 className="text-4xl font-bold tracking-tight dark:text-white">
+          <h1 className="text-2xl font-bold tracking-tight dark:text-white sm:text-4xl">
             FalconUp
           </h1>
           {session ? (
@@ -607,7 +607,7 @@ export default function Home() {
                   Some prices are unavailable — totals may be incomplete.
                 </p>
               )}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
                   <p className="text-sm text-zinc-500 dark:text-zinc-400">Total Value</p>
                   <p className="font-mono text-xl font-semibold dark:text-white">
@@ -689,38 +689,36 @@ export default function Home() {
                     </div>
                   ) : (
                     /* Display mode */
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div>
-                          <div className="flex items-baseline gap-2">
-                            <span
-                              className="cursor-pointer font-mono text-lg font-bold hover:text-blue-600 dark:text-white dark:hover:text-blue-400"
-                              onClick={() => selectSymbol(h.ticker)}
-                            >
-                              {h.ticker}
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <div className="flex items-baseline gap-2">
+                          <span
+                            className="cursor-pointer font-mono text-lg font-bold hover:text-blue-600 dark:text-white dark:hover:text-blue-400"
+                            onClick={() => selectSymbol(h.ticker)}
+                          >
+                            {h.ticker}
+                          </span>
+                          {h.leverage_factor !== 1 && (
+                            <span className="rounded bg-amber-100 px-1 text-xs font-medium text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                              {h.leverage_factor}x
                             </span>
-                            {h.leverage_factor !== 1 && (
-                              <span className="rounded bg-amber-100 px-1 text-xs font-medium text-amber-700 dark:bg-amber-900 dark:text-amber-300">
-                                {h.leverage_factor}x
-                              </span>
-                            )}
-                            {holdingSignals[h.ticker] && (
-                              <span className={`rounded px-1.5 py-0.5 text-xs font-semibold uppercase ${
-                                holdingSignals[h.ticker].signal === "buy"
-                                  ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
-                                  : holdingSignals[h.ticker].signal === "sell"
-                                    ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
-                                    : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
-                              }`}>
-                                {holdingSignals[h.ticker].signal}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm text-zinc-400">{h.name}</p>
+                          )}
+                          {holdingSignals[h.ticker] && (
+                            <span className={`rounded px-1.5 py-0.5 text-xs font-semibold uppercase ${
+                              holdingSignals[h.ticker].signal === "buy"
+                                ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
+                                : holdingSignals[h.ticker].signal === "sell"
+                                  ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
+                                  : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                            }`}>
+                              {holdingSignals[h.ticker].signal}
+                            </span>
+                          )}
                         </div>
+                        <p className="text-sm text-zinc-400">{h.name}</p>
                       </div>
-                      <div className="flex items-center gap-6">
-                        <div className="text-right">
+                      <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+                        <div className="sm:text-right">
                           <p className="text-sm text-zinc-500 dark:text-zinc-400">
                             {h.shares} shares @ ${h.avg_cost.toFixed(2)}
                           </p>
@@ -730,7 +728,7 @@ export default function Home() {
                             </p>
                           )}
                         </div>
-                        <div className="text-right">
+                        <div className="sm:text-right">
                           {h.pnl !== null && (
                             <>
                               <p className={`font-mono text-base font-semibold ${
@@ -857,7 +855,7 @@ export default function Home() {
         {/* Price History Chart */}
         {selectedTicker && (
           <section className="flex flex-col gap-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-xl font-semibold dark:text-zinc-200">
                 {selectedTicker} — Price History
               </h2>
@@ -890,14 +888,11 @@ export default function Home() {
             {history.length > 0 ? (
               <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
                 <Sparkline data={history} />
-                <div className="mt-3 flex justify-between text-sm text-zinc-400">
-                  <span>{history[0].date}</span>
+                <div className="mt-3 flex flex-col gap-1 text-sm text-zinc-400 sm:flex-row sm:justify-between">
+                  <span>{history[0].date} — {history[history.length - 1].date}</span>
                   <span>
-                    {history.length} trading days ·{" "}
-                    Low ${Math.min(...history.map((h) => h.low)).toFixed(2)} ·{" "}
-                    High ${Math.max(...history.map((h) => h.high)).toFixed(2)}
+                    {history.length} days · Low ${Math.min(...history.map((h) => h.low)).toFixed(2)} · High ${Math.max(...history.map((h) => h.high)).toFixed(2)}
                   </span>
-                  <span>{history[history.length - 1].date}</span>
                 </div>
               </div>
             ) : (
@@ -1005,28 +1000,30 @@ export default function Home() {
           <h2 className="text-xl font-semibold dark:text-zinc-200">
             Symbol Lookup
           </h2>
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <input
               type="text"
               value={symbol}
               onChange={(e) => setSymbol(e.target.value.toUpperCase())}
               onKeyDown={(e) => e.key === "Enter" && lookupSymbol()}
               placeholder="e.g. QQQ, AAPL"
-              className="flex-1 rounded-lg border border-zinc-300 px-4 py-2.5 text-base dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+              className="w-full rounded-lg border border-zinc-300 px-4 py-2.5 text-base dark:border-zinc-700 dark:bg-zinc-900 dark:text-white sm:flex-1"
             />
-            <button
-              onClick={lookupSymbol}
-              disabled={loading}
-              className="rounded-lg bg-zinc-900 px-5 py-2.5 text-base font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
-            >
-              {loading ? "..." : "Lookup"}
-            </button>
-            <button
-              onClick={searchSymbols}
-              className="rounded-lg border border-zinc-300 px-5 py-2.5 text-base font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            >
-              Search
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={lookupSymbol}
+                disabled={loading}
+                className="flex-1 rounded-lg bg-zinc-900 px-5 py-2.5 text-base font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300 sm:flex-none"
+              >
+                {loading ? "..." : "Lookup"}
+              </button>
+              <button
+                onClick={searchSymbols}
+                className="flex-1 rounded-lg border border-zinc-300 px-5 py-2.5 text-base font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800 sm:flex-none"
+              >
+                Search
+              </button>
+            </div>
           </div>
 
           {error && (

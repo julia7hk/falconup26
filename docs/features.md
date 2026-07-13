@@ -79,6 +79,9 @@ Status reflects what's shipped to prod. See
 
 ## V1 — "growth"
 
+- [ ] Google sign-in (OAuth) — coexists with email/password via Better
+      Auth account linking (same email can have both providers). Requires
+      Google Cloud Console OAuth app.
 - [ ] Push / email notifications for triggered alerts
 - [ ] Alert thresholds — set per-symbol alerts (e.g. "notify me if RSI
       drops below 30 or MACD crosses bullish")
