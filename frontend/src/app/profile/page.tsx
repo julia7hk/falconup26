@@ -130,7 +130,7 @@ export default function ProfilePage() {
 
   return (
     <div className="flex flex-col flex-1 items-center bg-zinc-50 font-sans dark:bg-zinc-950">
-      <main className="flex flex-1 w-full max-w-6xl flex-col gap-6 py-12 px-8">
+      <main className="flex flex-1 w-full max-w-6xl flex-col gap-6 py-8 px-4 sm:py-12 sm:px-8">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold tracking-tight dark:text-white">
             Profile
@@ -149,7 +149,7 @@ export default function ProfilePage() {
             <h2 className="text-base font-semibold dark:text-zinc-200">
               Portfolio Summary
             </h2>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div>
                 <p className={labelCls}>Holdings</p>
                 <p className="text-xl font-semibold dark:text-white">

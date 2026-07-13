@@ -96,48 +96,48 @@ Better Auth + FastAPI session bridge. See [auth.md](auth.md) for architecture an
 
 ### 1. Database
 
-- [ ] Alembic migration: Better Auth tables (`"user"`, `session`, `account`, `verification` — camelCase columns)
-- [ ] Alembic migration: truncate `portfolio_holding` (existing data is test), add `user_id` (text, NOT NULL, FK → `"user".id`), drop UNIQUE on `symbol_id`, add UNIQUE on `(user_id, symbol_id)`
+- [x] Alembic migration: Better Auth tables (`"user"`, `session`, `account`, `verification` — camelCase columns)
+- [x] Alembic migration: truncate `portfolio_holding` (existing data is test), add `user_id` (text, NOT NULL, FK → `"user".id`), drop UNIQUE on `symbol_id`, add UNIQUE on `(user_id, symbol_id)`
 
 ### 2. Frontend — Prisma
 
-Requires: migration applied so all tables exist for introspection.
-
-- [ ] `npx prisma init` — initialize Prisma in `frontend/`
-- [ ] Add `DATABASE_URL` to `frontend/.env` (localhost for dev, Docker bridge IP for containers — same pitfall as backend)
-- [ ] `npx prisma db pull` — introspect Postgres schema into `prisma/schema.prisma`
-- [ ] `npx prisma generate` — generate typed Prisma client
-- [ ] Prisma client singleton (`lib/db.ts`)
+- [x] `npx prisma init` — initialize Prisma in `frontend/`
+- [x] Add `DATABASE_URL` to `frontend/.env` (localhost for dev, Docker bridge IP for containers — same pitfall as backend)
+- [x] `npx prisma db pull` — introspect Postgres schema into `prisma/schema.prisma`
+- [x] `npx prisma generate` — generate typed Prisma client
+- [x] Prisma client singleton (`lib/db.ts`)
 
 ### 3. Frontend — Better Auth
 
-Requires: Prisma client working.
-
-- [ ] `npm install better-auth`
-- [ ] Auth server config (`lib/auth.ts`) — Prisma adapter, email/password, admin plugin
-- [ ] Auth client (`lib/auth-client.ts`) — `createAuthClient()`
-- [ ] Catchall route (`/api/auth/[...all]/route.ts`)
-- [ ] `BETTER_AUTH_SECRET` env var (add to `.env`, `.env.example`, Docker build args)
-- [ ] `/sign-in` page
-- [ ] `/sign-up` page
-- [ ] `authClient.useSession()` hook for session state
-- [ ] Middleware (`middleware.ts`) — redirect unauthenticated users to `/sign-in` (protect `/` and portfolio routes; `/api/symbols/*`, `/api/macro/*` stay public)
-- [ ] Header: user name + sign-out button (logged in) / sign-in link (logged out)
+- [x] `npm install better-auth`
+- [x] Auth server config (`lib/auth.ts`) — Prisma adapter, email/password
+- [x] Auth client (`lib/auth-client.ts`) — `createAuthClient()`
+- [x] Catchall route (`/api/auth/[...all]/route.ts`)
+- [x] `BETTER_AUTH_SECRET` env var (add to `.env`, `.env.example`, Docker build args)
+- [x] `/sign-in` page
+- [x] `/sign-up` page
+- [x] `authClient.useSession()` hook for session state
+- [x] Main page public — portfolio section only visible when signed in; sign-in link in header when logged out
+- [x] Header: user name (links to /profile) + sign-out button (logged in) / sign-in link (logged out)
+- [x] `/profile` page — portfolio summary, change name, change password
 
 ### 4. Backend (FastAPI) — session bridge
 
-Requires: Better Auth working (sessions exist in DB to look up).
-
-- [ ] `get_current_user` dependency — read `better-auth.session_token` cookie, look up session in DB, resolve user
-- [ ] All `/api/portfolio/*` routes get `Depends(get_current_user)` (`/api/symbols/*` and `/api/macro/*` stay public)
-- [ ] All `portfolio_holding` queries scoped by `user_id`
-- [ ] Upsert conflict target: `(symbol_id)` → `(user_id, symbol_id)`
+- [x] `get_current_user` dependency — read `better-auth.session_token` cookie, look up session in DB, resolve user
+- [x] All `/api/portfolio/*` routes get `Depends(get_current_user)` (`/api/symbols/*` and `/api/macro/*` stay public)
+- [x] All `portfolio_holding` queries scoped by `user_id`
+- [x] Upsert conflict target: `(symbol_id)` → `(user_id, symbol_id)`
 
 ### 5. Testing
 
-- [ ] pytest: portfolio CRUD returns 401 without session cookie
-- [ ] pytest: user A cannot see/modify user B's holdings
-- [ ] Manual E2E: register → add holdings → sign out → register new user → see empty portfolio
+- [x] pytest: portfolio CRUD returns 401 without session cookie
+- [x] pytest: user A cannot see/modify user B's holdings
+- [x] Manual E2E: register → add holdings → sign out → register new user → see empty portfolio
+
+## Milestone 5.6: Mobile Layout + Polish
+
+- [x] Fix mobile layout — responsive padding, stacking grids, holdings cards, price history, symbol lookup
+- [ ] Per-holding signal dropdown — expand Buy/Hold/Sell badge to show why, personalized to the user's position (avg cost, position size, portfolio context). Precursor to M8 explainer.
 
 ## Milestone 6: Portfolio Risk Engine
 
@@ -201,3 +201,9 @@ into personalized, contextual explanations. No chat box, no free-text input.
 - [ ] Open Graph / Twitter Card tags
 - [ ] robots.txt + sitemap
 - [ ] Lighthouse audit (perf, a11y, best practices)
+
+## Backlog (separate PRs)
+
+- [ ] Replace raw SQL `text()` queries with SQLAlchemy ORM models (sqlacodegen → generated models). Currently the entire backend uses `text()` consistently; this is a codebase-wide refactor, not tied to any feature milestone.
+- [ ] Better Auth admin plugin — role-based access control, user management, ban/unban (https://better-auth.com/docs/plugins/admin). Already used in kkulgag.
+- [ ] Google OAuth sign-in — Better Auth supports OAuth providers. Email + Google can coexist on the same email (account linking). Requires Google Cloud Console OAuth app setup.
