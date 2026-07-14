@@ -22,12 +22,14 @@ Status reflects what's shipped to prod. See
       which indicators fired, their current values, what threshold
       triggered the signal, and a plain-English template so you actually
       learn. Always available, no external dependency.
-- [ ] Portfolio-level risk analysis — concentration score (Herfindahl
+- [x] Portfolio-level risk analysis — concentration score (Herfindahl
       index + sector breakdown), pairwise correlation matrix, effective
-      leverage calculation, portfolio beta, max drawdown estimate, stress
-      scenarios ("if Nasdaq drops 10%, your portfolio drops ~X%"),
-      overall risk grade (A–F)
-- [ ] Sector & correlation heatmap — visualize how your holdings
+      leverage calculation, portfolio beta, actual historical max drawdown,
+      historical stress scenarios (replay real market events — COVID crash,
+      2022 tech selloff, etc. — using actual price data, not hypothetical
+      shocks), transparent risk grade (A–F) with visible per-component
+      penalty breakdown so the user sees exactly why they got the grade
+- [x] Sector & correlation heatmap — visualize how your holdings
       correlate with each other and whether you're overexposed to a
       single sector (e.g. tech-heavy with QQQ + SOXL + TQQQ)
 - [ ] What-if analysis — structured form (pick symbol + quantity) to

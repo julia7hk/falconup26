@@ -103,6 +103,61 @@ type Portfolio = {
   prices_complete: boolean;
 };
 
+type RiskData = {
+  concentration: {
+    herfindahl_index: number;
+    top_holding_pct: number;
+    sector_breakdown: Record<string, number>;
+    signal: string;
+  } | null;
+  effective_leverage: {
+    value: number;
+    leveraged_pct: number;
+    signal: string;
+  } | null;
+  portfolio_beta: {
+    value: number;
+    interpretation: string;
+  } | null;
+  max_drawdown: {
+    value: number;
+    worst_start: string;
+    worst_end: string;
+    annualized_vol: number;
+    signal: string;
+  } | null;
+  risk_grade: {
+    grade: string;
+    score: number;
+    components: Record<string, { penalty: number; max_penalty: number; reason: string }>;
+    interpretation: string;
+  } | null;
+  holdings_count: number;
+};
+
+type CorrelationData = {
+  matrix: Record<string, Record<string, number>>;
+  avg_pairwise: number | null;
+  max_pair: [string, string, number] | null;
+  tickers: string[];
+  data_points: number;
+  signal?: string;
+};
+
+type StressScenario = {
+  scenario_name: string;
+  period: string;
+  portfolio_impact_pct: number;
+  portfolio_impact_dollar: number;
+  holdings_impact: { ticker: string; return_pct: number | null; dollar_impact: number | null; note?: string }[];
+};
+
+type StressData = {
+  scenarios: StressScenario[];
+  portfolio_value: number;
+  disclaimer: string;
+};
+
 function Sparkline({ data }: { data: PriceBar[] }) {
   if (data.length < 2) return null;
   const closes = data.map((d) => d.close);
@@ -258,6 +313,329 @@ function CompositeCard({ indicators }: { indicators: IndicatorData }) {
   );
 }
 
+const GRADE_COLORS: Record<string, string> = {
+  A: "text-green-600 dark:text-green-400 border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-950",
+  B: "text-green-600 dark:text-green-400 border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-green-950/50",
+  C: "text-amber-600 dark:text-amber-400 border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950",
+  D: "text-orange-600 dark:text-orange-400 border-orange-300 bg-orange-50 dark:border-orange-700 dark:bg-orange-950",
+  F: "text-red-600 dark:text-red-400 border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-950",
+};
+
+function RiskGradeCard({ grade }: { grade: NonNullable<RiskData["risk_grade"]> }) {
+  const [expanded, setExpanded] = useState(false);
+  const colorClass = GRADE_COLORS[grade.grade] ?? GRADE_COLORS.C;
+  return (
+    <div className={`rounded-lg border ${colorClass}`}>
+      <button onClick={() => setExpanded(!expanded)} className="w-full p-5 text-left">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            <span className="text-5xl font-bold">{grade.grade}</span>
+            <div>
+              <p className="text-sm font-medium dark:text-zinc-300">Portfolio Risk Grade</p>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">{grade.interpretation}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 sm:flex-col sm:items-end sm:gap-0">
+            <p className="font-mono text-2xl font-semibold">{grade.score}</p>
+            <p className="text-xs text-zinc-400">/ 100 {expanded ? "▲" : "▼"}</p>
+          </div>
+        </div>
+      </button>
+      {expanded && (
+        <div className="border-t border-inherit px-5 pb-5 pt-3">
+          <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">
+            Score = 100 minus penalties. Each component deducts points based on risk level.
+          </p>
+          <div className="flex flex-col gap-2">
+            {Object.entries(grade.components).map(([key, comp]) => (
+              <div key={key} className="flex items-center gap-3">
+                <div className="w-24 text-sm font-medium capitalize text-zinc-600 dark:text-zinc-300">
+                  {key}
+                </div>
+                <div className="flex-1">
+                  <div className="h-2 rounded-full bg-zinc-200 dark:bg-zinc-700">
+                    <div
+                      className="h-2 rounded-full bg-red-500 dark:bg-red-400"
+                      style={{ width: `${(comp.penalty / comp.max_penalty) * 100}%` }}
+                    />
+                  </div>
+                </div>
+                <span className="w-16 text-right font-mono text-sm text-zinc-500">
+                  -{comp.penalty}/{comp.max_penalty}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 flex flex-col gap-1">
+            {Object.entries(grade.components).map(([key, comp]) => (
+              <p key={key} className="text-xs text-zinc-400">
+                <span className="font-medium capitalize">{key}:</span> {comp.reason}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const SECTOR_COLORS = [
+  "#3b82f6", "#ef4444", "#22c55e", "#f59e0b", "#8b5cf6",
+  "#ec4899", "#14b8a6", "#f97316", "#6366f1", "#84cc16",
+];
+
+function ConcentrationPieChart({ data }: { data: NonNullable<RiskData["concentration"]> }) {
+  const entries = Object.entries(data.sector_breakdown).sort((a, b) => b[1] - a[1]);
+  const total = entries.reduce((s, [, v]) => s + v, 0);
+
+  // Build SVG arc paths
+  const cx = 80, cy = 80, r = 70;
+  // Pre-compute cumulative start angles to avoid mutation during render
+  const angles = entries.map(([, pct]) => (pct / total) * 2 * Math.PI);
+  const cumAngles = angles.reduce<number[]>((acc, a) => {
+    acc.push((acc.length > 0 ? acc[acc.length - 1] : 0) + a);
+    return acc;
+  }, []);
+  const arcs = entries.map(([sector, pct], i) => {
+    const startAngle = -Math.PI / 2 + (i > 0 ? cumAngles[i - 1] : 0);
+    const endAngle = -Math.PI / 2 + cumAngles[i];
+    const startX = cx + r * Math.cos(startAngle);
+    const startY = cy + r * Math.sin(startAngle);
+    const endX = cx + r * Math.cos(endAngle);
+    const endY = cy + r * Math.sin(endAngle);
+    const largeArc = angles[i] > Math.PI ? 1 : 0;
+    const path = entries.length === 1
+      ? `M ${cx} ${cy - r} A ${r} ${r} 0 1 1 ${cx - 0.01} ${cy - r} Z`
+      : `M ${cx} ${cy} L ${startX} ${startY} A ${r} ${r} 0 ${largeArc} 1 ${endX} ${endY} Z`;
+    return { sector, pct, path, color: SECTOR_COLORS[i % SECTOR_COLORS.length] };
+  });
+
+  return (
+    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
+      <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Concentration</p>
+      <div className="mt-2 flex items-center gap-4">
+        <svg viewBox="0 0 160 160" className="h-28 w-28 shrink-0">
+          {arcs.map((a) => (
+            <path key={a.sector} d={a.path} fill={a.color} stroke="white" strokeWidth="1" />
+          ))}
+        </svg>
+        <div className="flex flex-col gap-1">
+          {arcs.map((a) => (
+            <div key={a.sector} className="flex items-center gap-2 text-xs">
+              <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: a.color }} />
+              <span className="text-zinc-600 dark:text-zinc-300">{a.sector}</span>
+              <span className="font-mono text-zinc-400">{a.pct.toFixed(1)}%</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="mt-2 text-xs text-zinc-400">
+        HHI: {data.herfindahl_index.toFixed(2)} — {data.signal.replace(/_/g, " ")}
+      </p>
+    </div>
+  );
+}
+
+function CorrelationHeatmap({ data }: { data: CorrelationData }) {
+  if (!data.tickers.length || !data.avg_pairwise) return null;
+  const tickers = data.tickers;
+  const n = tickers.length;
+  const cellSize = 50;
+  const labelW = 50;
+  const svgW = labelW + n * cellSize;
+  const svgH = labelW + n * cellSize;
+
+  function corrColor(v: number): string {
+    if (v >= 0) {
+      const t = Math.min(v, 1);
+      return `rgb(255,${Math.round(255 * (1 - t * 0.7))},${Math.round(255 * (1 - t * 0.7))})`;
+    } else {
+      const t = Math.min(-v, 1);
+      return `rgb(${Math.round(255 * (1 - t * 0.7))},${Math.round(255 * (1 - t * 0.7))},255)`;
+    }
+  }
+
+  // Cap rendered width so it doesn't stretch full-width for 2-3 tickers
+  const maxPx = Math.min(400, (n + 1) * 70);
+
+  return (
+    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
+      <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Correlation Matrix</p>
+      <div className="mt-2 flex justify-center overflow-x-auto">
+        <svg viewBox={`0 0 ${svgW} ${svgH}`} className="max-w-full" style={{ width: maxPx, height: maxPx * (svgH / svgW) }}>
+          {/* Column labels */}
+          {tickers.map((t, j) => (
+            <text
+              key={`col-${t}`}
+              x={labelW + j * cellSize + cellSize / 2}
+              y={labelW - 6}
+              textAnchor="middle"
+              fontSize="11"
+              fill="#71717a"
+            >
+              {t}
+            </text>
+          ))}
+          {/* Row labels + cells */}
+          {tickers.map((t1, i) => (
+            <g key={t1}>
+              <text
+                x={labelW - 6}
+                y={labelW + i * cellSize + cellSize / 2 + 4}
+                textAnchor="end"
+                fontSize="11"
+                fill="#71717a"
+              >
+                {t1}
+              </text>
+              {tickers.map((t2, j) => {
+                const v = data.matrix[t1]?.[t2] ?? 0;
+                return (
+                  <g key={`${t1}-${t2}`}>
+                    <rect
+                      x={labelW + j * cellSize + 1}
+                      y={labelW + i * cellSize + 1}
+                      width={cellSize - 2}
+                      height={cellSize - 2}
+                      fill={corrColor(v)}
+                      rx={3}
+                    />
+                    <text
+                      x={labelW + j * cellSize + cellSize / 2}
+                      y={labelW + i * cellSize + cellSize / 2 + 4}
+                      textAnchor="middle"
+                      fontSize="11"
+                      fontWeight="500"
+                      fill={Math.abs(v) > 0.5 ? "white" : "#333"}
+                    >
+                      {v.toFixed(2)}
+                    </text>
+                  </g>
+                );
+              })}
+            </g>
+          ))}
+        </svg>
+      </div>
+      <p className="mt-2 text-xs text-zinc-400">
+        Avg pairwise: {data.avg_pairwise.toFixed(2)}
+        {data.max_pair && ` — most correlated: ${data.max_pair[0]}/${data.max_pair[1]} (${data.max_pair[2].toFixed(2)})`}
+        {data.signal && ` — ${data.signal.replace(/_/g, " ")}`}
+      </p>
+    </div>
+  );
+}
+
+function LeverageGauge({ data }: { data: NonNullable<RiskData["effective_leverage"]> }) {
+  // Semi-circular gauge from 1x to 5x
+  const minVal = 1, maxVal = 5;
+  const clamped = Math.max(minVal, Math.min(maxVal, data.value));
+  const pct = (clamped - minVal) / (maxVal - minVal);
+  const angle = Math.PI * (1 - pct); // left (PI) = 1x, right (0) = 5x
+
+  const cx = 100, cy = 90, r = 70;
+  const needleX = cx + r * 0.85 * Math.cos(angle);
+  const needleY = cy - r * 0.85 * Math.sin(angle);
+
+  // Color zones
+  const zones = [
+    { start: 0, end: 0.125, color: "#22c55e" },     // 1x-1.5x green
+    { start: 0.125, end: 0.375, color: "#f59e0b" },  // 1.5x-2.5x amber
+    { start: 0.375, end: 0.625, color: "#f97316" },   // 2.5x-3.5x orange
+    { start: 0.625, end: 1, color: "#ef4444" },       // 3.5x-5x red
+  ];
+
+  return (
+    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
+      <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Effective Leverage</p>
+      <div className="mt-2 flex justify-center">
+        <svg viewBox="0 0 200 110" className="h-28 w-44">
+          {/* Arc zones */}
+          {zones.map((z, i) => {
+            const startAngle = Math.PI * (1 - z.start);
+            const endAngle = Math.PI * (1 - z.end);
+            const x1 = cx + r * Math.cos(startAngle);
+            const y1 = cy - r * Math.sin(startAngle);
+            const x2 = cx + r * Math.cos(endAngle);
+            const y2 = cy - r * Math.sin(endAngle);
+            return (
+              <path
+                key={i}
+                d={`M ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2}`}
+                fill="none"
+                stroke={z.color}
+                strokeWidth="12"
+                strokeLinecap="round"
+                opacity={0.3}
+              />
+            );
+          })}
+          {/* Needle */}
+          <line x1={cx} y1={cy} x2={needleX} y2={needleY} stroke="#18181b" strokeWidth="2.5" className="dark:stroke-zinc-300" />
+          <circle cx={cx} cy={cy} r="4" fill="#18181b" className="dark:fill-zinc-300" />
+          {/* Labels */}
+          <text x={cx - r - 5} y={cy + 12} textAnchor="middle" fontSize="9" fill="#71717a">1x</text>
+          <text x={cx} y={cy - r - 5} textAnchor="middle" fontSize="9" fill="#71717a">3x</text>
+          <text x={cx + r + 5} y={cy + 12} textAnchor="middle" fontSize="9" fill="#71717a">5x</text>
+        </svg>
+      </div>
+      <div className="mt-1 text-center">
+        <p className="font-mono text-2xl font-semibold dark:text-white">{data.value.toFixed(1)}x</p>
+        <p className="text-xs text-zinc-400">
+          {data.leveraged_pct.toFixed(0)}% in leveraged products — {data.signal.replace(/_/g, " ")}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function StressScenarioCard({ scenario }: { scenario: StressScenario }) {
+  const [expanded, setExpanded] = useState(false);
+  const isPositive = scenario.portfolio_impact_pct >= 0;
+  return (
+    <div className={`rounded-lg border p-4 ${
+      isPositive
+        ? "border-green-200 dark:border-green-800"
+        : scenario.portfolio_impact_pct < -20
+          ? "border-red-300 dark:border-red-700"
+          : "border-zinc-200 dark:border-zinc-700"
+    }`}>
+      <button onClick={() => setExpanded(!expanded)} className="w-full text-left">
+        <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">{scenario.scenario_name}</p>
+        <p className={`font-mono text-xl font-semibold ${
+          isPositive ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+        }`}>
+          {isPositive ? "+" : ""}{scenario.portfolio_impact_pct.toFixed(1)}%
+        </p>
+        <p className={`text-sm ${
+          isPositive ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+        }`}>
+          {isPositive ? "+" : ""}${scenario.portfolio_impact_dollar.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+        </p>
+        <p className="mt-1 text-xs text-zinc-400">{scenario.period} {expanded ? "▲" : "▼"}</p>
+      </button>
+      {expanded && scenario.holdings_impact.length > 0 && (
+        <div className="mt-3 border-t border-inherit pt-3">
+          <div className="flex flex-col gap-1">
+            {scenario.holdings_impact.map((h) => (
+              <div key={h.ticker} className="flex justify-between text-xs">
+                <span className="font-mono text-zinc-600 dark:text-zinc-300">{h.ticker}</span>
+                {h.return_pct !== null ? (
+                  <span className={h.return_pct >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
+                    {h.return_pct >= 0 ? "+" : ""}{h.return_pct.toFixed(1)}%
+                  </span>
+                ) : (
+                  <span className="text-zinc-400">{h.note ?? "no data"}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Home() {
   const router = useRouter();
   const { data: session } = authClient.useSession();
@@ -287,6 +665,10 @@ export default function Home() {
   const [editAvgCost, setEditAvgCost] = useState("");
   const [portfolioError, setPortfolioError] = useState("");
   const [holdingSignals, setHoldingSignals] = useState<Record<string, { signal: string; confidence: number }>>({});
+  const [riskData, setRiskData] = useState<RiskData | null>(null);
+  const [correlationData, setCorrelationData] = useState<CorrelationData | null>(null);
+  const [stressData, setStressData] = useState<StressData | null>(null);
+  const [riskLoading, setRiskLoading] = useState(false);
 
   useEffect(() => {
     fetch("/api/symbols/catalog")
@@ -325,7 +707,24 @@ export default function Home() {
         }),
       );
       setHoldingSignals(signals);
+      // Fetch risk data after portfolio loads (non-blocking)
+      if (data.holdings.length > 0) fetchRiskData();
     } catch {}
+  }
+
+  async function fetchRiskData() {
+    setRiskLoading(true);
+    try {
+      const [riskRes, corrRes, stressRes] = await Promise.all([
+        fetch("/api/portfolio/risk", { credentials: "include" }),
+        fetch("/api/portfolio/correlation", { credentials: "include" }),
+        fetch("/api/portfolio/stress?scenario=all", { credentials: "include" }),
+      ]);
+      if (riskRes.ok) setRiskData(await riskRes.json());
+      if (corrRes.ok) setCorrelationData(await corrRes.json());
+      if (stressRes.ok) setStressData(await stressRes.json());
+    } catch {}
+    setRiskLoading(false);
   }
 
   async function addHolding() {
@@ -792,6 +1191,90 @@ export default function Home() {
               </button>
             </div>
           ) : null}
+
+          {/* Portfolio Risk Analysis */}
+          {portfolio && portfolio.holdings.length > 0 && riskData && (
+            <div className="mt-6 flex flex-col gap-4 border-t border-zinc-300 pt-6 dark:border-zinc-600">
+              <div>
+                <h3 className="text-xl font-bold dark:text-zinc-200">Risk Analysis</h3>
+                <p className="mt-1 text-xs text-zinc-400">
+                  Based on historical data and portfolio composition. These are analytical measurements, not predictions or financial advice.
+                </p>
+              </div>
+
+              {/* Risk Grade */}
+              {riskData.risk_grade && (
+                <RiskGradeCard grade={riskData.risk_grade} />
+              )}
+
+              {/* Risk metric cards */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {riskData.concentration && (
+                  <ConcentrationPieChart data={riskData.concentration} />
+                )}
+                {riskData.effective_leverage && (
+                  <LeverageGauge data={riskData.effective_leverage} />
+                )}
+                {riskData.portfolio_beta && (
+                  <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
+                    <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Portfolio Beta</p>
+                    <p className="mt-2 font-mono text-3xl font-semibold dark:text-white">
+                      {riskData.portfolio_beta.value.toFixed(2)}
+                    </p>
+                    <p className="mt-1 text-xs text-zinc-400">{riskData.portfolio_beta.interpretation}</p>
+                    <p className="mt-1 text-xs text-zinc-400">
+                      A 10% market drop ≈ {(riskData.portfolio_beta.value * 10).toFixed(0)}% portfolio drop
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Correlation heatmap */}
+              {correlationData && correlationData.tickers.length >= 2 && (
+                <CorrelationHeatmap data={correlationData} />
+              )}
+
+              {riskData.max_drawdown && (
+                <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Historical Max Drawdown</p>
+                      <p className="font-mono text-2xl font-semibold text-red-600 dark:text-red-400">
+                        -{riskData.max_drawdown.value.toFixed(1)}%
+                      </p>
+                    </div>
+                    <div className="sm:text-right">
+                      <p className="text-xs text-zinc-400">Worst period</p>
+                      <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                        {riskData.max_drawdown.worst_start} to {riskData.max_drawdown.worst_end}
+                      </p>
+                      <p className="text-xs text-zinc-400">
+                        Annualized volatility: {riskData.max_drawdown.annualized_vol.toFixed(1)}%
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Stress scenarios */}
+              {stressData && stressData.scenarios.length > 0 && (
+                <div className="flex flex-col gap-3">
+                  <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+                    Historical Stress Scenarios
+                  </p>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {stressData.scenarios.map((s) => (
+                      <StressScenarioCard key={s.scenario_name} scenario={s} />
+                    ))}
+                  </div>
+                  <p className="text-xs text-zinc-400">{stressData.disclaimer}</p>
+                </div>
+              )}
+            </div>
+          )}
+          {portfolio && portfolio.holdings.length > 0 && riskLoading && !riskData && (
+            <p className="text-sm text-zinc-400">Loading risk analysis...</p>
+          )}
         </section>}
 
         {/* Symbol Catalog */}

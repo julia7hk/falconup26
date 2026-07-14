@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-FalconUp — portfolio intelligence platform for new/conservative investors. Per-symbol risk indicators (RSI, MACD, Bollinger, SMA crossover, ATR, beta, Sharpe) + portfolio-level risk analysis (concentration, correlation, effective leverage, stress scenarios) + structured LLM explainer layer (versioned prompts, output validation, deterministic fallback — no chatbot). See `docs/features.md` for the full feature ladder (V0–V2) and `docs/milestones.md` for sprint breakdown.
+FalconUp — portfolio intelligence platform for new/conservative investors. Per-symbol risk indicators (RSI, MACD, Bollinger, SMA crossover, ATR, beta, Sharpe) + portfolio-level risk analysis (concentration, correlation, effective leverage, historical stress scenarios, transparent risk grade) + structured LLM explainer layer (versioned prompts, output validation, deterministic fallback — no chatbot). See `docs/features.md` for the full feature ladder (V0–V2) and `docs/milestones.md` for sprint breakdown.
 
 Project motivation context:
 "i am a college student and i just got into investing. i dont really know what
@@ -21,7 +21,7 @@ Project goals (priority order): learning & resume > personal use > multi-user > 
 
 ## Current Status
 
-**Deployed** at `falconup.julia7hk.com` (oc40, Oracle Cloud Ampere ARM64). M1–M5.5 complete: project foundation, data sources, database, indicator engine, portfolio CRUD + frontend, auth + multi-tenancy.
+**Deployed** at `falconup.julia7hk.com` (oc40, Oracle Cloud Ampere ARM64). M1–M5.5 complete: project foundation, data sources, database, indicator engine, portfolio CRUD + frontend, auth + multi-tenancy. M6 (portfolio risk engine) complete: concentration, correlation, leverage, beta, drawdown, historical stress scenarios, transparent risk grade.
 
 **Authentication is live.** Better Auth (Next.js) + FastAPI session bridge. Each user has their own portfolio. Public endpoints (`/api/symbols/*`, `/api/macro/*`) don't require auth. Portfolio endpoints (`/api/portfolio/*`) return 401 without a valid session. The main page is public — symbol catalog, indicators, lookup, and macro are visible without signing in; portfolio section only appears when logged in. See `docs/auth.md` for architecture.
 
@@ -30,7 +30,8 @@ Project goals (priority order): learning & resume > personal use > multi-user > 
 - `backend/` — FastAPI + Python 3.13 (API, indicator engine, portfolio risk engine, LLM explainer)
 - `backend/market/` — market data abstraction layer (provider protocol, yfinance impl, FRED macro data, Redis cache)
 - `backend/indicators/` — per-symbol indicator engine (models.py, math.py, composite.py). Pure functions, no DB dependency.
-- `backend/routers/` — FastAPI route handlers (`symbols.py`, `macro.py`, `indicators.py`, `portfolio.py`)
+- `backend/risk/` — portfolio-level risk engine (models.py, math.py). Pure functions: concentration (HHI), correlation matrix, effective leverage, portfolio beta, max drawdown, historical stress test, risk grade. No DB dependency.
+- `backend/routers/` — FastAPI route handlers (`symbols.py`, `macro.py`, `indicators.py`, `portfolio.py`, `risk.py`)
 - `backend/auth.py` — `get_current_user` FastAPI dependency. Reads Better Auth session cookie, looks up shared `session` table in Postgres, returns user dict or 401.
 - `backend/db.py` — SQLAlchemy async engine + session factory (asyncpg driver). Defers engine creation if `DATABASE_URL` is not set (safe for CI import).
 - `backend/scripts/` — one-off CLI scripts (`seed.py`, `backfill.py`)
@@ -183,7 +184,7 @@ Tables:
 
 Future tables:
 - `indicator_snapshot` — M9 (data pipeline)
-- `portfolio_risk_snapshot` — M6
+- `portfolio_risk_snapshot` — M9 (persist computed risk metrics on schedule; M6 computes on-the-fly)
 - `llm_analysis_cache` — M8
 
 ### Indicator Engine (`backend/indicators/`)
@@ -203,6 +204,23 @@ composite.py   → normalize_signal (each indicator → [-1,+1])
 - Missing indicators (insufficient data) are excluded and remaining weights re-normalized.
 - Endpoint: `GET /api/symbols/{ticker}/indicators` computes on-the-fly (no caching/persistence yet).
 
+### Portfolio Risk Engine (`backend/risk/`)
+
+```
+models.py      → frozen dataclasses (ConcentrationResult, CorrelationResult, etc.)
+math.py        → 7 pure functions + predefined stress scenario date ranges
+               → concentration, correlation_matrix, effective_leverage,
+               → portfolio_beta, max_drawdown, historical_stress_test,
+               → worst_period, risk_grade
+```
+
+- All math functions take plain Python types (lists, dicts, floats) and return result dataclasses. No DB, no side effects.
+- Stress scenarios replay real historical events (COVID crash, 2022 tech selloff, etc.) using actual price data from `price_history`. No made-up shocks.
+- Risk grade uses a transparent linear penalty system (100 - penalties = score). Each component (concentration, correlation, leverage, beta, drawdown) has a visible penalty with a plain-English reason.
+- Grade thresholds (harsh): A >= 80, B >= 65, C >= 50, D >= 35, F < 35.
+- Endpoints: `GET /api/portfolio/risk`, `GET /api/portfolio/correlation`, `GET /api/portfolio/stress?scenario=...` — all auth-gated.
+- Computes on-the-fly (like indicators). Persistence deferred to M9.
+
 ### Data Flow
 
 ```
@@ -219,6 +237,12 @@ External APIs (yfinance, FRED)
 Postgres (price_history + macro_history)
   → indicators/math.py (pure computation, on-the-fly)
   → /api/symbols/{ticker}/indicators (all 7 indicators + composite signal)
+
+Postgres (portfolio_holding + symbol + price_history) + live quotes
+  → risk/math.py (pure computation, on-the-fly)
+  → /api/portfolio/risk (concentration, leverage, beta, drawdown, grade)
+  → /api/portfolio/correlation (pairwise correlation matrix)
+  → /api/portfolio/stress (historical scenario replay)
 ```
 
 ## Ports
@@ -242,6 +266,7 @@ Postgres (price_history + macro_history)
 - **Prisma generate required before frontend build:** `npx prisma generate` must run before `npm run build`. The Dockerfile does this automatically. CI does it as a separate step. Forgetting it locally causes import errors for `@/generated/prisma/client`.
 - **Next.js rewrite excludes /api/auth/:** `next.config.ts` rewrites `/api/*` to FastAPI, but excludes `/api/auth/*` so Better Auth's catchall route handler works. If a new `/api/auth/*` endpoint is added to FastAPI, it won't be reachable.
 - **Better Auth tables use camelCase:** The `user`, `session`, `account`, `verification` tables have camelCase column names (e.g. `userId`, `expiresAt`) to match Better Auth's Prisma adapter. The rest of the schema uses snake_case.
+- **direnv not loaded in non-interactive shells:** The `.envrc` uses `dotenv` to load `.env`, but this only works in interactive shells with direnv hooked in. When running backend/frontend from scripts or CI, source the env manually: `set -a && source ../.env && set +a` before running `uvicorn` or `npm run dev`.
 
 ## Ideas Under Consideration
 
