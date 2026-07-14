@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-FalconUp — portfolio intelligence platform for new/conservative investors. Per-symbol risk indicators (RSI, MACD, Bollinger, SMA crossover, ATR, beta, Sharpe) + portfolio-level risk analysis (concentration, correlation, effective leverage, stress scenarios) + structured LLM explainer layer (versioned prompts, output validation, deterministic fallback — no chatbot). See `docs/features.md` for the full feature ladder (V0–V2) and `docs/milestones.md` for sprint breakdown.
+FalconUp — portfolio intelligence platform for new/conservative investors. Per-symbol risk indicators (RSI, MACD, Bollinger, SMA crossover, ATR, beta, Sharpe) + portfolio-level risk analysis (concentration, correlation, effective leverage, historical stress scenarios, transparent risk grade) + structured LLM explainer layer (versioned prompts, output validation, deterministic fallback — no chatbot). See `docs/features.md` for the full feature ladder (V0–V2) and `docs/milestones.md` for sprint breakdown.
 
 Project motivation context:
 "i am a college student and i just got into investing. i dont really know what
@@ -183,7 +183,7 @@ Tables:
 
 Future tables:
 - `indicator_snapshot` — M9 (data pipeline)
-- `portfolio_risk_snapshot` — M6
+- `portfolio_risk_snapshot` — M9 (persist computed risk metrics on schedule; M6 computes on-the-fly)
 - `llm_analysis_cache` — M8
 
 ### Indicator Engine (`backend/indicators/`)
