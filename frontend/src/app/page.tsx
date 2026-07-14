@@ -327,7 +327,7 @@ function RiskGradeCard({ grade }: { grade: NonNullable<RiskData["risk_grade"]> }
   return (
     <div className={`rounded-lg border ${colorClass}`}>
       <button onClick={() => setExpanded(!expanded)} className="w-full p-5 text-left">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
             <span className="text-5xl font-bold">{grade.grade}</span>
             <div>
@@ -335,7 +335,7 @@ function RiskGradeCard({ grade }: { grade: NonNullable<RiskData["risk_grade"]> }
               <p className="text-sm text-zinc-500 dark:text-zinc-400">{grade.interpretation}</p>
             </div>
           </div>
-          <div className="text-right">
+          <div className="flex items-center gap-2 sm:flex-col sm:items-end sm:gap-0">
             <p className="font-mono text-2xl font-semibold">{grade.score}</p>
             <p className="text-xs text-zinc-400">/ 100 {expanded ? "▲" : "▼"}</p>
           </div>
@@ -390,15 +390,20 @@ function ConcentrationPieChart({ data }: { data: NonNullable<RiskData["concentra
 
   // Build SVG arc paths
   const cx = 80, cy = 80, r = 70;
-  let cumAngle = -Math.PI / 2;
+  // Pre-compute cumulative start angles to avoid mutation during render
+  const angles = entries.map(([, pct]) => (pct / total) * 2 * Math.PI);
+  const cumAngles = angles.reduce<number[]>((acc, a) => {
+    acc.push((acc.length > 0 ? acc[acc.length - 1] : 0) + a);
+    return acc;
+  }, []);
   const arcs = entries.map(([sector, pct], i) => {
-    const angle = (pct / total) * 2 * Math.PI;
-    const startX = cx + r * Math.cos(cumAngle);
-    const startY = cy + r * Math.sin(cumAngle);
-    cumAngle += angle;
-    const endX = cx + r * Math.cos(cumAngle);
-    const endY = cy + r * Math.sin(cumAngle);
-    const largeArc = angle > Math.PI ? 1 : 0;
+    const startAngle = -Math.PI / 2 + (i > 0 ? cumAngles[i - 1] : 0);
+    const endAngle = -Math.PI / 2 + cumAngles[i];
+    const startX = cx + r * Math.cos(startAngle);
+    const startY = cy + r * Math.sin(startAngle);
+    const endX = cx + r * Math.cos(endAngle);
+    const endY = cy + r * Math.sin(endAngle);
+    const largeArc = angles[i] > Math.PI ? 1 : 0;
     const path = entries.length === 1
       ? `M ${cx} ${cy - r} A ${r} ${r} 0 1 1 ${cx - 0.01} ${cy - r} Z`
       : `M ${cx} ${cy} L ${startX} ${startY} A ${r} ${r} 0 ${largeArc} 1 ${endX} ${endY} Z`;
@@ -435,40 +440,37 @@ function CorrelationHeatmap({ data }: { data: CorrelationData }) {
   if (!data.tickers.length || !data.avg_pairwise) return null;
   const tickers = data.tickers;
   const n = tickers.length;
-  const cellSize = Math.min(48, 200 / n);
-  const labelW = 40;
-  const w = labelW + n * cellSize;
-  const h = labelW + n * cellSize;
+  const cellSize = 50;
+  const labelW = 50;
+  const svgW = labelW + n * cellSize;
+  const svgH = labelW + n * cellSize;
 
   function corrColor(v: number): string {
     if (v >= 0) {
       const t = Math.min(v, 1);
-      const r = Math.round(255);
-      const g = Math.round(255 * (1 - t * 0.7));
-      const b = Math.round(255 * (1 - t * 0.7));
-      return `rgb(${r},${g},${b})`;
+      return `rgb(255,${Math.round(255 * (1 - t * 0.7))},${Math.round(255 * (1 - t * 0.7))})`;
     } else {
       const t = Math.min(-v, 1);
-      const r = Math.round(255 * (1 - t * 0.7));
-      const g = Math.round(255 * (1 - t * 0.7));
-      const b = Math.round(255);
-      return `rgb(${r},${g},${b})`;
+      return `rgb(${Math.round(255 * (1 - t * 0.7))},${Math.round(255 * (1 - t * 0.7))},255)`;
     }
   }
+
+  // Cap rendered width so it doesn't stretch full-width for 2-3 tickers
+  const maxPx = Math.min(400, (n + 1) * 70);
 
   return (
     <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
       <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Correlation Matrix</p>
-      <div className="mt-2 overflow-x-auto">
-        <svg viewBox={`0 0 ${w} ${h}`} className="max-w-full" style={{ maxHeight: 300 }}>
+      <div className="mt-2 flex justify-center overflow-x-auto">
+        <svg viewBox={`0 0 ${svgW} ${svgH}`} className="max-w-full" style={{ width: maxPx, height: maxPx * (svgH / svgW) }}>
           {/* Column labels */}
           {tickers.map((t, j) => (
             <text
               key={`col-${t}`}
               x={labelW + j * cellSize + cellSize / 2}
-              y={labelW - 4}
+              y={labelW - 6}
               textAnchor="middle"
-              fontSize={Math.min(10, cellSize * 0.35)}
+              fontSize="11"
               fill="#71717a"
             >
               {t}
@@ -478,10 +480,10 @@ function CorrelationHeatmap({ data }: { data: CorrelationData }) {
           {tickers.map((t1, i) => (
             <g key={t1}>
               <text
-                x={labelW - 4}
-                y={labelW + i * cellSize + cellSize / 2 + 3}
+                x={labelW - 6}
+                y={labelW + i * cellSize + cellSize / 2 + 4}
                 textAnchor="end"
-                fontSize={Math.min(10, cellSize * 0.35)}
+                fontSize="11"
                 fill="#71717a"
               >
                 {t1}
@@ -491,24 +493,23 @@ function CorrelationHeatmap({ data }: { data: CorrelationData }) {
                 return (
                   <g key={`${t1}-${t2}`}>
                     <rect
-                      x={labelW + j * cellSize}
-                      y={labelW + i * cellSize}
-                      width={cellSize - 1}
-                      height={cellSize - 1}
+                      x={labelW + j * cellSize + 1}
+                      y={labelW + i * cellSize + 1}
+                      width={cellSize - 2}
+                      height={cellSize - 2}
                       fill={corrColor(v)}
-                      rx={2}
+                      rx={3}
                     />
-                    {cellSize >= 28 && (
-                      <text
-                        x={labelW + j * cellSize + cellSize / 2 - 0.5}
-                        y={labelW + i * cellSize + cellSize / 2 + 3}
-                        textAnchor="middle"
-                        fontSize={Math.min(9, cellSize * 0.28)}
-                        fill={Math.abs(v) > 0.5 ? "white" : "#333"}
-                      >
-                        {v.toFixed(2)}
-                      </text>
-                    )}
+                    <text
+                      x={labelW + j * cellSize + cellSize / 2}
+                      y={labelW + i * cellSize + cellSize / 2 + 4}
+                      textAnchor="middle"
+                      fontSize="11"
+                      fontWeight="500"
+                      fill={Math.abs(v) > 0.5 ? "white" : "#333"}
+                    >
+                      {v.toFixed(2)}
+                    </text>
                   </g>
                 );
               })}
@@ -1033,85 +1034,6 @@ export default function Home() {
             </>
           )}
 
-          {/* Portfolio Risk Analysis */}
-          {portfolio && portfolio.holdings.length > 0 && riskData && (
-            <div className="flex flex-col gap-4">
-              <h3 className="text-lg font-semibold dark:text-zinc-200">Risk Analysis</h3>
-
-              {/* Risk Grade */}
-              {riskData.risk_grade && (
-                <RiskGradeCard grade={riskData.risk_grade} />
-              )}
-
-              {/* Risk metric cards */}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {riskData.concentration && (
-                  <ConcentrationPieChart data={riskData.concentration} />
-                )}
-                {riskData.effective_leverage && (
-                  <LeverageGauge data={riskData.effective_leverage} />
-                )}
-                {riskData.portfolio_beta && (
-                  <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
-                    <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Portfolio Beta</p>
-                    <p className="mt-2 font-mono text-3xl font-semibold dark:text-white">
-                      {riskData.portfolio_beta.value.toFixed(2)}
-                    </p>
-                    <p className="mt-1 text-xs text-zinc-400">{riskData.portfolio_beta.interpretation}</p>
-                    <p className="mt-1 text-xs text-zinc-400">
-                      A 10% market drop ≈ {(riskData.portfolio_beta.value * 10).toFixed(0)}% portfolio drop
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {riskData.max_drawdown && (
-                <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Historical Max Drawdown</p>
-                      <p className="font-mono text-2xl font-semibold text-red-600 dark:text-red-400">
-                        -{riskData.max_drawdown.value.toFixed(1)}%
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-zinc-400">Worst period</p>
-                      <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                        {riskData.max_drawdown.worst_start} to {riskData.max_drawdown.worst_end}
-                      </p>
-                      <p className="text-xs text-zinc-400">
-                        Annualized volatility: {riskData.max_drawdown.annualized_vol.toFixed(1)}%
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Correlation heatmap */}
-              {correlationData && correlationData.tickers.length >= 2 && (
-                <CorrelationHeatmap data={correlationData} />
-              )}
-
-              {/* Stress scenarios */}
-              {stressData && stressData.scenarios.length > 0 && (
-                <div className="flex flex-col gap-3">
-                  <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-                    Historical Stress Scenarios
-                  </p>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {stressData.scenarios.map((s) => (
-                      <StressScenarioCard key={s.scenario_name} scenario={s} />
-                    ))}
-                  </div>
-                  <p className="text-xs text-zinc-400">{stressData.disclaimer}</p>
-                </div>
-              )}
-            </div>
-          )}
-          {portfolio && portfolio.holdings.length > 0 && riskLoading && !riskData && (
-            <p className="text-sm text-zinc-400">Loading risk analysis...</p>
-          )}
-
           {/* Holdings List */}
           {portfolio && portfolio.holdings.length > 0 ? (
             <div className="flex flex-col gap-3">
@@ -1269,6 +1191,90 @@ export default function Home() {
               </button>
             </div>
           ) : null}
+
+          {/* Portfolio Risk Analysis */}
+          {portfolio && portfolio.holdings.length > 0 && riskData && (
+            <div className="mt-6 flex flex-col gap-4 border-t border-zinc-300 pt-6 dark:border-zinc-600">
+              <div>
+                <h3 className="text-xl font-bold dark:text-zinc-200">Risk Analysis</h3>
+                <p className="mt-1 text-xs text-zinc-400">
+                  Based on historical data and portfolio composition. These are analytical measurements, not predictions or financial advice.
+                </p>
+              </div>
+
+              {/* Risk Grade */}
+              {riskData.risk_grade && (
+                <RiskGradeCard grade={riskData.risk_grade} />
+              )}
+
+              {/* Risk metric cards */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {riskData.concentration && (
+                  <ConcentrationPieChart data={riskData.concentration} />
+                )}
+                {riskData.effective_leverage && (
+                  <LeverageGauge data={riskData.effective_leverage} />
+                )}
+                {riskData.portfolio_beta && (
+                  <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
+                    <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Portfolio Beta</p>
+                    <p className="mt-2 font-mono text-3xl font-semibold dark:text-white">
+                      {riskData.portfolio_beta.value.toFixed(2)}
+                    </p>
+                    <p className="mt-1 text-xs text-zinc-400">{riskData.portfolio_beta.interpretation}</p>
+                    <p className="mt-1 text-xs text-zinc-400">
+                      A 10% market drop ≈ {(riskData.portfolio_beta.value * 10).toFixed(0)}% portfolio drop
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Correlation heatmap */}
+              {correlationData && correlationData.tickers.length >= 2 && (
+                <CorrelationHeatmap data={correlationData} />
+              )}
+
+              {riskData.max_drawdown && (
+                <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Historical Max Drawdown</p>
+                      <p className="font-mono text-2xl font-semibold text-red-600 dark:text-red-400">
+                        -{riskData.max_drawdown.value.toFixed(1)}%
+                      </p>
+                    </div>
+                    <div className="sm:text-right">
+                      <p className="text-xs text-zinc-400">Worst period</p>
+                      <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                        {riskData.max_drawdown.worst_start} to {riskData.max_drawdown.worst_end}
+                      </p>
+                      <p className="text-xs text-zinc-400">
+                        Annualized volatility: {riskData.max_drawdown.annualized_vol.toFixed(1)}%
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Stress scenarios */}
+              {stressData && stressData.scenarios.length > 0 && (
+                <div className="flex flex-col gap-3">
+                  <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+                    Historical Stress Scenarios
+                  </p>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {stressData.scenarios.map((s) => (
+                      <StressScenarioCard key={s.scenario_name} scenario={s} />
+                    ))}
+                  </div>
+                  <p className="text-xs text-zinc-400">{stressData.disclaimer}</p>
+                </div>
+              )}
+            </div>
+          )}
+          {portfolio && portfolio.holdings.length > 0 && riskLoading && !riskData && (
+            <p className="text-sm text-zinc-400">Loading risk analysis...</p>
+          )}
         </section>}
 
         {/* Symbol Catalog */}

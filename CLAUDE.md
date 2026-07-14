@@ -266,6 +266,7 @@ Postgres (portfolio_holding + symbol + price_history) + live quotes
 - **Prisma generate required before frontend build:** `npx prisma generate` must run before `npm run build`. The Dockerfile does this automatically. CI does it as a separate step. Forgetting it locally causes import errors for `@/generated/prisma/client`.
 - **Next.js rewrite excludes /api/auth/:** `next.config.ts` rewrites `/api/*` to FastAPI, but excludes `/api/auth/*` so Better Auth's catchall route handler works. If a new `/api/auth/*` endpoint is added to FastAPI, it won't be reachable.
 - **Better Auth tables use camelCase:** The `user`, `session`, `account`, `verification` tables have camelCase column names (e.g. `userId`, `expiresAt`) to match Better Auth's Prisma adapter. The rest of the schema uses snake_case.
+- **direnv not loaded in non-interactive shells:** The `.envrc` uses `dotenv` to load `.env`, but this only works in interactive shells with direnv hooked in. When running backend/frontend from scripts or CI, source the env manually: `set -a && source ../.env && set +a` before running `uvicorn` or `npm run dev`.
 
 ## Ideas Under Consideration
 
