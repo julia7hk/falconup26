@@ -157,6 +157,9 @@ def effective_leverage(
     if not weights:
         raise ValueError("Need at least one holding")
 
+    # abs() intentional: inverse ETFs (e.g. SQQQ at -3x) carry the same
+    # magnitude of leverage risk as bull ETFs, even though they reduce net
+    # directional exposure.  We measure leverage as amplification, not direction.
     value = sum(w * abs(lf) for w, lf in zip(weights, leverage_factors))
     leveraged_pct = sum(w for w, lf in zip(weights, leverage_factors) if abs(lf) > 1) * 100
 
@@ -280,7 +283,8 @@ def historical_stress_test(
         raise ValueError("weights and tickers must be the same length")
 
     holdings_impact = []
-    portfolio_return = 0.0
+    covered_weight = 0.0
+    weighted_return = 0.0
 
     for ticker, weight in zip(tickers, weights):
         prices = holdings_prices.get(ticker)
@@ -316,7 +320,17 @@ def historical_stress_test(
             "dollar_impact": round(dollar_impact, 2),
         })
 
-        portfolio_return += weight * holding_return
+        covered_weight += weight
+        weighted_return += weight * holding_return
+
+    # Renormalize portfolio return over covered weight so missing holdings
+    # don't artificially mute the impact (fix #2)
+    if covered_weight > 0 and covered_weight < 1.0:
+        portfolio_return = weighted_return / covered_weight
+    else:
+        portfolio_return = weighted_return
+
+    coverage_pct = round(covered_weight * 100, 1)
 
     return StressScenarioResult(
         scenario_name=scenario_name,
@@ -324,6 +338,7 @@ def historical_stress_test(
         portfolio_impact_pct=round(portfolio_return * 100, 1),
         portfolio_impact_dollar=round(portfolio_return * portfolio_value, 2),
         holdings_impact=holdings_impact,
+        coverage_pct=coverage_pct,
     )
 
 

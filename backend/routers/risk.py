@@ -7,6 +7,7 @@ import logging
 from dataclasses import asdict
 from datetime import date, timedelta
 
+import numpy as np
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -138,30 +139,57 @@ async def _fetch_portfolio_risk_data(
         date_str = pr.date.isoformat() if hasattr(pr.date, "isoformat") else str(pr.date)
         prices_by_ticker.setdefault(ticker_key, {})[date_str] = float(pr.close)
 
-    # 4. Align daily returns by date (only dates present for ALL holdings + SPY)
-    all_dates = None
+    # 4. Compute per-ticker date sets for flexible alignment
+    dates_by_ticker: dict[str, set[str]] = {}
     for t in tickers:
         if t in prices_by_ticker:
-            t_dates = set(prices_by_ticker[t].keys())
-            all_dates = t_dates if all_dates is None else all_dates & t_dates
+            dates_by_ticker[t] = set(prices_by_ticker[t].keys())
 
-    if spy_row and "SPY" in prices_by_ticker:
-        spy_dates = set(prices_by_ticker["SPY"].keys())
-        if all_dates is not None:
-            all_dates = all_dates & spy_dates
+    spy_date_set = set(prices_by_ticker["SPY"].keys()) if "SPY" in prices_by_ticker else set()
 
+    # Global intersection (all holdings + SPY) for portfolio-level series
+    all_dates: set[str] | None = None
+    for t in tickers:
+        if t in dates_by_ticker:
+            all_dates = dates_by_ticker[t] if all_dates is None else all_dates & dates_by_ticker[t]
+    if spy_date_set and all_dates is not None:
+        all_dates = all_dates & spy_date_set
     sorted_dates = sorted(all_dates) if all_dates else []
 
-    # Compute daily returns for each ticker
+    # Per-pair correlation uses pairwise date intersection (fix #3: ragged histories)
     returns_by_ticker: dict[str, list[float]] = {}
+    # For correlation, compute returns on each ticker's own full date range
     for t in tickers:
-        if t not in prices_by_ticker or len(sorted_dates) < 2:
+        if t not in prices_by_ticker:
             continue
-        closes = [prices_by_ticker[t][d] for d in sorted_dates]
+        t_dates_sorted = sorted(dates_by_ticker[t])
+        if len(t_dates_sorted) < 2:
+            continue
+        closes = [prices_by_ticker[t][d] for d in t_dates_sorted]
         returns = [(closes[i] - closes[i - 1]) / closes[i - 1]
                    for i in range(1, len(closes)) if closes[i - 1] != 0]
         if returns:
             returns_by_ticker[t] = returns
+
+    # For correlation_matrix, we need aligned returns — build pairwise-aligned
+    # returns dict using pairwise date intersections
+    corr_returns: dict[str, list[float]] = {}
+    if len(dates_by_ticker) >= 2:
+        # Use intersection of all tickers that HAVE data (not SPY)
+        corr_dates: set[str] | None = None
+        for t in tickers:
+            if t in dates_by_ticker:
+                corr_dates = dates_by_ticker[t] if corr_dates is None else corr_dates & dates_by_ticker[t]
+        if corr_dates and len(corr_dates) >= 2:
+            corr_sorted = sorted(corr_dates)
+            for t in tickers:
+                if t not in prices_by_ticker:
+                    continue
+                closes = [prices_by_ticker[t][d] for d in corr_sorted]
+                returns = [(closes[i] - closes[i - 1]) / closes[i - 1]
+                           for i in range(1, len(closes)) if closes[i - 1] != 0]
+                if returns:
+                    corr_returns[t] = returns
 
     spy_returns = []
     if "SPY" in prices_by_ticker and len(sorted_dates) >= 2:
@@ -169,30 +197,48 @@ async def _fetch_portfolio_risk_data(
         spy_returns = [(spy_closes[i] - spy_closes[i - 1]) / spy_closes[i - 1]
                        for i in range(1, len(spy_closes)) if spy_closes[i - 1] != 0]
 
-    # 5. Compute per-symbol betas
-    betas = []
+    # 5. Compute per-symbol betas (fix #5: None instead of silent 1.0 fallback)
+    betas: list[float | None] = []
     for t in tickers:
-        if t in prices_by_ticker and "SPY" in prices_by_ticker and len(sorted_dates) >= 60:
-            sym_closes = [prices_by_ticker[t][d] for d in sorted_dates]
-            spy_closes = [prices_by_ticker["SPY"][d] for d in sorted_dates]
-            try:
-                beta_result = compute_beta(sym_closes, spy_closes)
-                betas.append(beta_result.value)
-            except Exception:
-                betas.append(1.0)  # fallback
+        if t in prices_by_ticker and "SPY" in prices_by_ticker:
+            # Use pairwise intersection with SPY for this ticker
+            pair_dates = sorted(dates_by_ticker.get(t, set()) & spy_date_set)
+            if len(pair_dates) >= 60:
+                sym_closes = [prices_by_ticker[t][d] for d in pair_dates]
+                spy_closes_aligned = [prices_by_ticker["SPY"][d] for d in pair_dates]
+                try:
+                    beta_result = compute_beta(sym_closes, spy_closes_aligned)
+                    betas.append(beta_result.value)
+                except Exception:
+                    logger.warning("Beta calculation failed for %s, marking unavailable", t)
+                    betas.append(None)
+            else:
+                logger.warning("Beta unavailable for %s: only %d aligned dates (need 60)", t, len(pair_dates))
+                betas.append(None)
         else:
-            betas.append(1.0)
+            betas.append(None)
 
-    # 6. Compute portfolio value time series (for drawdown)
+    # 6. Compute portfolio value time series using normalized prices (fix #1)
+    # Normalize each holding's price to base-1 (price/price_on_first_date)
+    # then weight by portfolio weight — this ensures drawdown reflects
+    # true weighted returns, not nominal price differences.
     portfolio_values = []
     portfolio_dates = []
     if sorted_dates:
+        # Get base prices (first date in aligned series)
+        base_prices: dict[str, float] = {}
+        for i, t in enumerate(tickers):
+            if t in prices_by_ticker and sorted_dates[0] in prices_by_ticker[t]:
+                base_prices[t] = prices_by_ticker[t][sorted_dates[0]]
+
         for d in sorted_dates:
-            daily_value = sum(
-                weights[i] * prices_by_ticker[tickers[i]].get(d, 0)
-                for i in range(len(tickers))
-                if tickers[i] in prices_by_ticker
-            )
+            daily_value = 0.0
+            for i, t in enumerate(tickers):
+                if t not in base_prices or base_prices[t] == 0:
+                    continue
+                price = prices_by_ticker[t].get(d, 0)
+                # Normalized return from base * weight
+                daily_value += weights[i] * (price / base_prices[t])
             if daily_value > 0:
                 portfolio_values.append(daily_value)
                 portfolio_dates.append(d)
@@ -203,12 +249,14 @@ async def _fetch_portfolio_risk_data(
         "weights": weights,
         "tickers": tickers,
         "returns_by_ticker": returns_by_ticker,
+        "corr_returns": corr_returns,
         "spy_returns": spy_returns,
         "betas": betas,
         "portfolio_value": total_value,
         "portfolio_values": portfolio_values,
         "portfolio_dates": portfolio_dates,
         "prices_by_ticker": prices_by_ticker,
+        "data_days": len(sorted_dates),
     }
 
 
@@ -244,13 +292,29 @@ async def get_portfolio_risk(
         data["weights"],
         [h["leverage_factor"] for h in data["holdings"]],
     )
-    beta_r = portfolio_beta(data["weights"], data["betas"])
+    # Portfolio beta: exclude holdings with unavailable beta, use available ones
+    available_betas = [(w, b) for w, b in zip(data["weights"], data["betas"]) if b is not None]
+    if available_betas:
+        beta_weights, beta_values = zip(*available_betas)
+        # Renormalize weights over holdings with beta data
+        total_beta_weight = sum(beta_weights)
+        norm_weights = [w / total_beta_weight for w in beta_weights]
+        beta_r = portfolio_beta(norm_weights, list(beta_values))
+    else:
+        beta_r = portfolio_beta([1.0], [1.0])  # no data, assume market
 
-    # Correlation (only if 2+ holdings with return data)
+    # Correlation (only if 2+ holdings with aligned return data)
     corr = None
-    if len(data["returns_by_ticker"]) >= 2:
+    if len(data["corr_returns"]) >= 2:
         try:
-            corr = correlation_matrix(data["returns_by_ticker"])
+            corr = correlation_matrix(data["corr_returns"])
+            # Guard against NaN from zero-variance series
+            if corr is not None and (
+                not np.isfinite(corr.avg_pairwise)
+                or any(not np.isfinite(v) for row in corr.matrix.values() for v in row.values())
+            ):
+                logger.warning("Correlation matrix contains NaN/Inf, discarding")
+                corr = None
         except Exception as exc:
             logger.warning("Correlation calculation failed: %s", exc)
 
@@ -277,6 +341,7 @@ async def get_portfolio_risk(
         "max_drawdown": asdict(dd) if dd else None,
         "risk_grade": asdict(grade) if grade else None,
         "holdings_count": len(data["holdings"]),
+        "data_days": data["data_days"],
         "computed_at": date.today().isoformat(),
     }
 
@@ -298,7 +363,7 @@ async def get_portfolio_correlation(
             "data_points": 0,
         }
 
-    if len(data["returns_by_ticker"]) < 2:
+    if len(data["corr_returns"]) < 2:
         return {
             "matrix": {},
             "avg_pairwise": None,
@@ -309,19 +374,22 @@ async def get_portfolio_correlation(
         }
 
     try:
-        corr = correlation_matrix(data["returns_by_ticker"])
+        corr = correlation_matrix(data["corr_returns"])
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Correlation failed: {exc}")
 
-    # Data points = length of return series (all same after alignment)
-    first_ticker = next(iter(data["returns_by_ticker"]))
-    data_points = len(data["returns_by_ticker"][first_ticker])
+    # Guard NaN from zero-variance series
+    if not np.isfinite(corr.avg_pairwise):
+        raise HTTPException(status_code=500, detail="Correlation produced NaN (zero-variance series)")
+
+    first_ticker = next(iter(data["corr_returns"]))
+    data_points = len(data["corr_returns"][first_ticker])
 
     return {
         "matrix": corr.matrix,
         "avg_pairwise": corr.avg_pairwise,
         "max_pair": list(corr.max_pair),
-        "tickers": list(data["returns_by_ticker"].keys()),
+        "tickers": list(data["corr_returns"].keys()),
         "data_points": data_points,
         "signal": corr.signal,
     }

@@ -230,7 +230,8 @@ class TestHistoricalStressTest:
         assert result.holdings_impact[0]["return_pct"] == -20.0
         assert result.holdings_impact[1]["return_pct"] == -60.0
 
-    def test_missing_ticker_data(self):
+    def test_missing_ticker_data_renormalizes(self):
+        """Missing holdings should not mute the portfolio impact."""
         holdings_prices = {
             "QQQ": {"2020-02-19": 100.0, "2020-03-23": 80.0},
         }
@@ -245,6 +246,10 @@ class TestHistoricalStressTest:
         )
         assert result.holdings_impact[1]["return_pct"] is None
         assert result.holdings_impact[1]["note"] == "no data for this period"
+        # Renormalized: QQQ is the only covered holding, so portfolio impact
+        # should reflect QQQ's full -20%, not -10% (half-weighted)
+        assert result.portfolio_impact_pct == -20.0
+        assert result.coverage_pct == 50.0
 
     def test_positive_scenario(self):
         holdings_prices = {

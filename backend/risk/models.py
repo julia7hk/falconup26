@@ -62,6 +62,7 @@ class StressScenarioResult:
     portfolio_impact_pct: float  # total portfolio return during period
     portfolio_impact_dollar: float  # dollar impact based on current value
     holdings_impact: list[dict]  # per-holding: ticker, return_pct, dollar_impact
+    coverage_pct: float = 100.0  # % of portfolio weight with data for this period
 
 
 @dataclass(frozen=True, slots=True)
