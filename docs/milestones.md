@@ -143,15 +143,15 @@ Better Auth + FastAPI session bridge. See [auth.md](auth.md) for architecture an
 
 Depends on M5 (needs holdings to analyze).
 
-- [ ] Concentration score — Herfindahl index across holdings + sector exposure breakdown
-- [ ] Pairwise correlation matrix of all holdings (rolling 1-year daily returns)
-- [ ] Effective leverage — weighted average leverage factor across portfolio
-- [ ] Portfolio beta — weighted beta vs S&P 500
-- [ ] Max drawdown estimate — historical volatility x effective leverage
-- [ ] Stress scenarios — model portfolio impact for predefined shocks (Nasdaq -10%, rates +1%, semiconductor crash)
-- [ ] Overall portfolio risk grade (A–F) from composite of above metrics
-- [ ] API endpoints: `GET /api/portfolio/risk`, `GET /api/portfolio/correlation`, `GET /api/portfolio/stress?scenario=...`
-- [ ] Frontend: risk grade card, concentration pie chart, correlation heatmap, effective leverage gauge, stress scenario cards
+- [x] Concentration score — Herfindahl index across holdings + sector exposure breakdown
+- [x] Pairwise correlation matrix of all holdings (rolling 1-year daily returns)
+- [x] Effective leverage — weighted average leverage factor across portfolio
+- [x] Portfolio beta — weighted beta vs S&P 500
+- [x] Max drawdown — actual historical max drawdown from portfolio value time series (peak-to-trough), not an estimate
+- [x] Historical stress scenarios — replay real market events (COVID crash, 2022 tech selloff, 2018 Q4, 2020 recovery, worst-30-days) using actual price data from `price_history`, per-holding breakdown with real returns
+- [x] Transparent risk grade (A–F) — each component (concentration, correlation, leverage, beta, drawdown) has a visible penalty score with plain-English reason, so the user sees exactly why they got the grade
+- [x] API endpoints: `GET /api/portfolio/risk`, `GET /api/portfolio/correlation`, `GET /api/portfolio/stress?scenario=...`
+- [x] Frontend: risk grade card (expandable breakdown), concentration pie chart, correlation heatmap, effective leverage gauge, stress scenario cards (with real historical returns + disclaimer)
 
 ## Milestone 7: What-If Analysis
 
