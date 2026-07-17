@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useMemo } from "react";
 import type { PriceBar } from "@/types";
 
 const TICK_INTERVALS = [
@@ -51,6 +51,14 @@ const MB = 30;
 const plotW = W - ML - MR;
 const plotH = H - MT - MB;
 
+function toX(i: number, count: number) {
+  return ML + (i / (count - 1)) * plotW;
+}
+
+function toY(v: number, yMin: number, yRange: number) {
+  return MT + plotH - ((v - yMin) / yRange) * plotH;
+}
+
 export function PriceChart({ data }: { data: PriceBar[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -60,16 +68,10 @@ export function PriceChart({ data }: { data: PriceBar[] }) {
   const tooltipRef = useRef<HTMLDivElement>(null);
   const crosshairGroupRef = useRef<SVGGElement>(null);
 
-  // Pre-compute data point positions once
-  const computed = useRef<{
-    closes: number[];
-    xs: number[];
-    ys: number[];
-    yMin: number;
-    yRange: number;
-  } | null>(null);
+  // All derived data computed via useMemo — safe to use during render
+  const chart = useMemo(() => {
+    if (data.length < 2) return null;
 
-  if (data.length >= 2) {
     const closes = data.map((d) => d.close);
     const dataMin = Math.min(...closes);
     const dataMax = Math.max(...closes);
@@ -79,40 +81,66 @@ export function PriceChart({ data }: { data: PriceBar[] }) {
     const yMax = dataMax + yPad;
     const yRange = yMax - yMin;
 
-    const toX = (i: number) => ML + (i / (closes.length - 1)) * plotW;
-    const toY = (v: number) => MT + plotH - ((v - yMin) / yRange) * plotH;
+    const xs = closes.map((_, i) => toX(i, closes.length));
+    const ys = closes.map((c) => toY(c, yMin, yRange));
 
-    computed.current = {
-      closes,
-      xs: closes.map((_, i) => toX(i)),
-      ys: closes.map((c) => toY(c)),
-      yMin,
-      yRange,
-    };
-  }
+    // Y-axis ticks
+    const tickInterval = pickTickInterval(dataRange, 5);
+    const yTicks: number[] = [];
+    const firstTick = Math.ceil(yMin / tickInterval) * tickInterval;
+    for (let t = firstTick; t <= yMax; t += tickInterval) {
+      yTicks.push(t);
+    }
+
+    // X-axis date labels
+    const xLabelCount = Math.min(6, data.length);
+    const xLabelStep = Math.max(1, Math.floor((data.length - 1) / (xLabelCount - 1)));
+    const xLabels: { idx: number; label: string }[] = [];
+    for (let i = 0; i < data.length; i += xLabelStep) {
+      xLabels.push({ idx: i, label: formatDate(data[i].date, data.length) });
+    }
+    const lastLabel = xLabels[xLabels.length - 1];
+    if (lastLabel.idx !== data.length - 1 && data.length - 1 - lastLabel.idx > xLabelStep * 0.5) {
+      xLabels.push({
+        idx: data.length - 1,
+        label: formatDate(data[data.length - 1].date, data.length),
+      });
+    }
+
+    // Paths
+    const linePath = closes
+      .map((c, i) => `${i === 0 ? "M" : "L"} ${toX(i, closes.length).toFixed(1)} ${toY(c, yMin, yRange).toFixed(1)}`)
+      .join(" ");
+
+    const areaPath =
+      linePath +
+      ` L ${toX(closes.length - 1, closes.length).toFixed(1)} ${toY(yMin, yMin, yRange).toFixed(1)}` +
+      ` L ${toX(0, closes.length).toFixed(1)} ${toY(yMin, yMin, yRange).toFixed(1)} Z`;
+
+    const trending = closes[closes.length - 1] >= closes[0];
+    const lineColor = trending ? "#22c55e" : "#ef4444";
+
+    return { closes, xs, ys, yMin, yRange, yTicks, xLabels, linePath, areaPath, lineColor };
+  }, [data]);
 
   const updateCrosshair = useCallback(
     (clientX: number) => {
       const svg = svgRef.current;
-      const c = computed.current;
-      if (!svg || !c || data.length < 2) return;
+      if (!svg || !chart) return;
 
       const rect = svg.getBoundingClientRect();
       const pxFraction = (clientX - rect.left) / rect.width;
-      // Raw cursor X in viewBox coords, clamped to plot area
       const cursorVBX = Math.max(ML, Math.min(W - MR, pxFraction * W));
-      // Nearest data index
       const plotFraction = (cursorVBX - ML) / plotW;
       const idx = Math.max(
         0,
         Math.min(data.length - 1, Math.round(plotFraction * (data.length - 1))),
       );
 
-      const dotX = c.xs[idx];
-      const dotY = c.ys[idx];
+      const dotX = chart.xs[idx];
+      const dotY = chart.ys[idx];
       const bar = data[idx];
 
-      // Update DOM directly — no React re-render
       if (crosshairGroupRef.current) crosshairGroupRef.current.style.display = "";
       if (vLineRef.current) {
         vLineRef.current.setAttribute("x1", String(cursorVBX));
@@ -149,7 +177,7 @@ export function PriceChart({ data }: { data: PriceBar[] }) {
         `;
       }
     },
-    [data],
+    [data, chart],
   );
 
   const hideCrosshair = useCallback(() => {
@@ -157,7 +185,6 @@ export function PriceChart({ data }: { data: PriceBar[] }) {
     if (tooltipRef.current) tooltipRef.current.style.display = "none";
   }, []);
 
-  // Attach pointer events imperatively so they're not passive (needed for preventDefault on touch)
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -180,57 +207,9 @@ export function PriceChart({ data }: { data: PriceBar[] }) {
     };
   }, [updateCrosshair, hideCrosshair]);
 
-  if (data.length < 2) return null;
+  if (!chart) return null;
 
-  const c = computed.current!;
-  const { closes } = c;
-  const dataMin = Math.min(...closes);
-  const dataMax = Math.max(...closes);
-  const dataRange = dataMax - dataMin || 1;
-  const yPad = dataRange * 0.05;
-  const yMin = dataMin - yPad;
-  const yMax = dataMax + yPad;
-  const yRange = yMax - yMin;
-
-  const toX = (i: number) => ML + (i / (closes.length - 1)) * plotW;
-  const toY = (v: number) => MT + plotH - ((v - yMin) / yRange) * plotH;
-
-  // Y-axis ticks
-  const tickInterval = pickTickInterval(dataRange, 5);
-  const yTicks: number[] = [];
-  const firstTick = Math.ceil(yMin / tickInterval) * tickInterval;
-  for (let t = firstTick; t <= yMax; t += tickInterval) {
-    yTicks.push(t);
-  }
-
-  // X-axis date labels
-  const xLabelCount = Math.min(6, data.length);
-  const xLabelStep = Math.max(1, Math.floor((data.length - 1) / (xLabelCount - 1)));
-  const xLabels: { idx: number; label: string }[] = [];
-  for (let i = 0; i < data.length; i += xLabelStep) {
-    xLabels.push({ idx: i, label: formatDate(data[i].date, data.length) });
-  }
-  // Only append the last date if it's far enough from the previous label to avoid overlap
-  const lastLabel = xLabels[xLabels.length - 1];
-  if (lastLabel.idx !== data.length - 1 && data.length - 1 - lastLabel.idx > xLabelStep * 0.5) {
-    xLabels.push({
-      idx: data.length - 1,
-      label: formatDate(data[data.length - 1].date, data.length),
-    });
-  }
-
-  // Line + area paths
-  const linePath = closes
-    .map((cl, i) => `${i === 0 ? "M" : "L"} ${toX(i).toFixed(1)} ${toY(cl).toFixed(1)}`)
-    .join(" ");
-
-  const areaPath =
-    linePath +
-    ` L ${toX(closes.length - 1).toFixed(1)} ${toY(yMin).toFixed(1)}` +
-    ` L ${toX(0).toFixed(1)} ${toY(yMin).toFixed(1)} Z`;
-
-  const trending = closes[closes.length - 1] >= closes[0];
-  const lineColor = trending ? "#22c55e" : "#ef4444";
+  const { yTicks, xLabels, linePath, areaPath, lineColor } = chart;
 
   return (
     <div ref={containerRef} className="relative select-none touch-none">
@@ -245,9 +224,9 @@ export function PriceChart({ data }: { data: PriceBar[] }) {
           <line
             key={t}
             x1={ML}
-            y1={toY(t)}
+            y1={toY(t, chart.yMin, chart.yRange)}
             x2={W - MR}
-            y2={toY(t)}
+            y2={toY(t, chart.yMin, chart.yRange)}
             stroke="#e4e4e7"
             strokeWidth="0.5"
             className="dark:stroke-zinc-800"
@@ -259,7 +238,7 @@ export function PriceChart({ data }: { data: PriceBar[] }) {
           <text
             key={`label-${t}`}
             x={ML - 8}
-            y={toY(t) + 4}
+            y={toY(t, chart.yMin, chart.yRange) + 4}
             textAnchor="end"
             fontSize="11"
             fill="#a1a1aa"
@@ -273,7 +252,7 @@ export function PriceChart({ data }: { data: PriceBar[] }) {
         {xLabels.map(({ idx, label }) => (
           <text
             key={`x-${idx}`}
-            x={toX(idx)}
+            x={toX(idx, chart.closes.length)}
             y={H - 6}
             textAnchor="middle"
             fontSize="10"

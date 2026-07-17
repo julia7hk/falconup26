@@ -15,48 +15,46 @@ export default function SymbolPage() {
   const [history, setHistory] = useState<PriceBar[]>([]);
   const [historyDays, setHistoryDays] = useState(365);
   const [indicators, setIndicators] = useState<IndicatorData | null>(null);
-  const [indicatorsLoading, setIndicatorsLoading] = useState(true);
   const [indicatorsError, setIndicatorsError] = useState("");
+  // Track what params were last fetched to derive loading state
+  const [fetched, setFetched] = useState<{ ticker: string; days: number } | null>(null);
+  const indicatorsLoading = !fetched || fetched.ticker !== upperTicker || fetched.days !== historyDays;
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    fetchData(historyDays);
-  }, [upperTicker]);
-
-  async function fetchData(days: number) {
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
-    setIndicatorsLoading(true);
-    setIndicatorsError("");
-    try {
-      const [histRes, indRes] = await Promise.all([
-        fetch(`/api/symbols/${upperTicker}/history-db?days=${days}`, { signal: ctrl.signal }),
-        fetch(`/api/symbols/${upperTicker}/indicators`, { signal: ctrl.signal }),
-      ]);
-      if (histRes.ok) setHistory(await histRes.json());
-      if (indRes.ok) {
-        setIndicators(await indRes.json());
-      } else {
-        setIndicatorsError(`Could not load indicators (${indRes.status})`);
+
+    async function load() {
+      try {
+        const [histRes, indRes] = await Promise.all([
+          fetch(`/api/symbols/${upperTicker}/history-db?days=${historyDays}`, { signal: ctrl.signal }),
+          fetch(`/api/symbols/${upperTicker}/indicators`, { signal: ctrl.signal }),
+        ]);
+        if (ctrl.signal.aborted) return;
+        if (histRes.ok) setHistory(await histRes.json());
+        if (indRes.ok) {
+          setIndicators(await indRes.json());
+          setIndicatorsError("");
+        } else {
+          setIndicatorsError(`Could not load indicators (${indRes.status})`);
+        }
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") return;
+        setIndicatorsError("Failed to fetch data");
+      } finally {
+        if (!ctrl.signal.aborted) setFetched({ ticker: upperTicker, days: historyDays });
       }
-    } catch (e) {
-      if (e instanceof DOMException && e.name === "AbortError") return;
-      setIndicatorsError("Failed to fetch data");
-    } finally {
-      if (!ctrl.signal.aborted) setIndicatorsLoading(false);
     }
-  }
 
-  async function changeRange(days: number) {
-    abortRef.current?.abort();
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
+    load();
+
+    return () => ctrl.abort();
+  }, [upperTicker, historyDays]);
+
+  function changeRange(days: number) {
     setHistoryDays(days);
-    try {
-      const res = await fetch(`/api/symbols/${upperTicker}/history-db?days=${days}`, { signal: ctrl.signal });
-      if (res.ok) setHistory(await res.json());
-    } catch {}
   }
 
   return (
