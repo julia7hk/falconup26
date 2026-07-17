@@ -396,7 +396,12 @@ export default function DashboardPage() {
               {portfolio.holdings.map((h) => (
                 <div
                   key={h.id}
-                  className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700"
+                  className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700 sm:cursor-default cursor-pointer active:bg-zinc-100 dark:active:bg-zinc-800 sm:active:bg-transparent dark:sm:active:bg-transparent"
+                  onClick={() => {
+                    if (editingId === h.id) return;
+                    if (window.matchMedia("(min-width: 640px)").matches) return;
+                    router.push(`/symbols/${h.ticker}`);
+                  }}
                 >
                   {editingId === h.id ? (
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -446,7 +451,7 @@ export default function DashboardPage() {
                       <div>
                         <div className="flex items-baseline gap-2">
                           <Link
-                            href={`/?symbol=${h.ticker}`}
+                            href={`/symbols/${h.ticker}`}
                             className="font-mono text-lg font-bold hover:text-blue-600 dark:text-white dark:hover:text-blue-400"
                           >
                             {h.ticker}
@@ -514,7 +519,7 @@ export default function DashboardPage() {
                             <p className="text-sm text-zinc-400">Price unavailable</p>
                           )}
                         </div>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                           <button
                             onClick={() => {
                               setEditingId(h.id);
