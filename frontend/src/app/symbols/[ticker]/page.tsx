@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import type { PriceBar, IndicatorData } from "@/types";
-import { Sparkline } from "@/components/Sparkline";
+import { PriceChart } from "@/components/PriceChart";
 import { IndicatorCard } from "@/components/IndicatorCard";
 import { CompositeCard } from "@/components/CompositeCard";
 
@@ -17,18 +17,22 @@ export default function SymbolPage() {
   const [indicators, setIndicators] = useState<IndicatorData | null>(null);
   const [indicatorsLoading, setIndicatorsLoading] = useState(true);
   const [indicatorsError, setIndicatorsError] = useState("");
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     fetchData(historyDays);
   }, [upperTicker]);
 
   async function fetchData(days: number) {
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     setIndicatorsLoading(true);
     setIndicatorsError("");
     try {
       const [histRes, indRes] = await Promise.all([
-        fetch(`/api/symbols/${upperTicker}/history-db?days=${days}`),
-        fetch(`/api/symbols/${upperTicker}/indicators`),
+        fetch(`/api/symbols/${upperTicker}/history-db?days=${days}`, { signal: ctrl.signal }),
+        fetch(`/api/symbols/${upperTicker}/indicators`, { signal: ctrl.signal }),
       ]);
       if (histRes.ok) setHistory(await histRes.json());
       if (indRes.ok) {
@@ -36,17 +40,21 @@ export default function SymbolPage() {
       } else {
         setIndicatorsError(`Could not load indicators (${indRes.status})`);
       }
-    } catch {
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       setIndicatorsError("Failed to fetch data");
     } finally {
-      setIndicatorsLoading(false);
+      if (!ctrl.signal.aborted) setIndicatorsLoading(false);
     }
   }
 
   async function changeRange(days: number) {
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     setHistoryDays(days);
     try {
-      const res = await fetch(`/api/symbols/${upperTicker}/history-db?days=${days}`);
+      const res = await fetch(`/api/symbols/${upperTicker}/history-db?days=${days}`, { signal: ctrl.signal });
       if (res.ok) setHistory(await res.json());
     } catch {}
   }
@@ -95,7 +103,7 @@ export default function SymbolPage() {
 
           {history.length > 0 ? (
             <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
-              <Sparkline data={history} />
+              <PriceChart data={history} />
               <div className="mt-3 flex flex-col gap-1 text-sm text-zinc-400 sm:flex-row sm:justify-between">
                 <span>
                   {history[0].date} — {history[history.length - 1].date}

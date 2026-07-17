@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import type {
@@ -12,7 +12,7 @@ import type {
   SearchResult,
   IndicatorData,
 } from "@/types";
-import { Sparkline } from "@/components/Sparkline";
+import { PriceChart } from "@/components/PriceChart";
 import { IndicatorCard } from "@/components/IndicatorCard";
 import { CompositeCard } from "@/components/CompositeCard";
 
@@ -33,6 +33,7 @@ export default function Home() {
   const [indicatorsError, setIndicatorsError] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     fetch("/api/symbols/catalog")
@@ -42,6 +43,9 @@ export default function Home() {
   }, []);
 
   async function selectSymbol(ticker: string, days = historyDays) {
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     const isNewTicker = ticker !== selectedTicker;
     setSelectedTicker(ticker);
     if (isNewTicker) {
@@ -51,10 +55,10 @@ export default function Home() {
     }
     try {
       const fetches: Promise<Response>[] = [
-        fetch(`/api/symbols/${ticker}/history-db?days=${days}`),
+        fetch(`/api/symbols/${ticker}/history-db?days=${days}`, { signal: ctrl.signal }),
       ];
       if (isNewTicker) {
-        fetches.push(fetch(`/api/symbols/${ticker}/indicators`));
+        fetches.push(fetch(`/api/symbols/${ticker}/indicators`, { signal: ctrl.signal }));
       }
       const results = await Promise.all(fetches);
       if (results[0].ok) setHistory(await results[0].json());
@@ -65,10 +69,11 @@ export default function Home() {
           setIndicatorsError(`Could not load indicators (${results[1]?.status ?? "network error"})`);
         }
       }
-    } catch {
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       if (isNewTicker) setIndicatorsError("Failed to fetch indicators");
     } finally {
-      if (isNewTicker) setIndicatorsLoading(false);
+      if (!ctrl.signal.aborted && isNewTicker) setIndicatorsLoading(false);
     }
   }
 
@@ -245,7 +250,7 @@ export default function Home() {
 
             {history.length > 0 ? (
               <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
-                <Sparkline data={history} />
+                <PriceChart data={history} />
                 <div className="mt-3 flex flex-col gap-1 text-sm text-zinc-400 sm:flex-row sm:justify-between">
                   <span>{history[0].date} — {history[history.length - 1].date}</span>
                   <span>
