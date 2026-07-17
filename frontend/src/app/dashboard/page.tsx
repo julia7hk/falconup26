@@ -352,29 +352,29 @@ export default function DashboardPage() {
 
           {/* Portfolio Summary */}
           {portfolio && portfolio.holdings.length > 0 && (
-            <>
+            <div className="rounded-xl bg-[#efefef] p-5 dark:bg-zinc-900">
               {!portfolio.prices_complete && (
-                <p className="text-sm text-amber-600 dark:text-amber-400">
+                <p className="mb-3 text-sm text-amber-600 dark:text-amber-400">
                   Some prices are unavailable — totals may be incomplete.
                 </p>
               )}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+                <div>
                   <p className="text-sm text-zinc-500 dark:text-zinc-400">Total Value</p>
-                  <p className="font-mono text-xl font-semibold dark:text-white">
+                  <p className="font-mono text-2xl font-semibold dark:text-white">
                     ${fmt(portfolio.total_value)}
                   </p>
                 </div>
-                <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+                <div>
                   <p className="text-sm text-zinc-500 dark:text-zinc-400">Total Cost</p>
-                  <p className="font-mono text-xl font-semibold dark:text-white">
+                  <p className="font-mono text-2xl font-semibold dark:text-white">
                     ${fmt(portfolio.total_cost)}
                   </p>
                 </div>
-                <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+                <div>
                   <p className="text-sm text-zinc-500 dark:text-zinc-400">Total P&L</p>
                   <p
-                    className={`font-mono text-xl font-semibold ${
+                    className={`font-mono text-2xl font-semibold ${
                       portfolio.total_pnl >= 0
                         ? "text-green-600 dark:text-green-400"
                         : "text-red-600 dark:text-red-400"
@@ -384,12 +384,15 @@ export default function DashboardPage() {
                   </p>
                 </div>
               </div>
-            </>
+            </div>
           )}
 
           {/* Holdings List */}
           {portfolio && portfolio.holdings.length > 0 ? (
             <div className="flex flex-col gap-3">
+              <h3 className="text-sm font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+                Holdings
+              </h3>
               {portfolio.holdings.map((h) => (
                 <div
                   key={h.id}
