@@ -19,9 +19,11 @@ from indicators.math import (
     beta,
     bollinger_width,
     macd,
+    max_drawdown,
     rsi,
     sharpe_ratio,
     sma_crossover,
+    sortino_ratio,
 )
 
 router = APIRouter(prefix="/api/symbols", tags=["indicators"])
@@ -37,6 +39,8 @@ MIN_POINTS = {
     "atr": 15,          # period (14) + 1
     "beta": 60,         # ~3 months for meaningful covariance
     "sharpe": 60,       # ~3 months for meaningful Sharpe
+    "sortino": 60,      # ~3 months for meaningful Sortino
+    "max_drawdown": 30, # ~6 weeks for a meaningful peak-to-trough
     "sma_crossover": 200,
 }
 
@@ -78,6 +82,10 @@ async def get_indicators(
     highs = [float(r.symbol_high) for r in rows]
     lows = [float(r.symbol_low) for r in rows]
     spy_closes = [float(r.spy_close) for r in rows]
+    dates = [
+        r.date.isoformat() if hasattr(r.date, "isoformat") else str(r.date)
+        for r in rows
+    ]
 
     # Fetch risk-free rate from macro_history
     rf_result = await session.execute(
@@ -109,6 +117,8 @@ async def get_indicators(
         "atr": lambda: atr(highs, lows, closes),
         "beta": lambda: beta(closes, spy_closes),
         "sharpe": lambda: sharpe_ratio(closes, risk_free_rate),
+        "sortino": lambda: sortino_ratio(closes, risk_free_rate),
+        "max_drawdown": lambda: max_drawdown(closes, dates),
         "sma_crossover": lambda: sma_crossover(closes),
     }
 
