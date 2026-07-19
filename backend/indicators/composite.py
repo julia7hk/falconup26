@@ -19,6 +19,18 @@ from indicators.models import (
 # Sharpe and Sortino are both risk-adjusted-return measures, so their combined
 # weight (0.24) is deliberately close to Sharpe's old solo weight (0.20) — we
 # split the budget between them rather than double-counting the same signal.
+#
+# DELIBERATE STANCE: the volatility/stability cluster — ATR (0.08),
+# Bollinger (0.08), beta (0.13), and max_drawdown (0.08), ~0.37 of the score —
+# treats low volatility as bullish and high volatility as bearish. For the
+# leveraged ETFs this app centers on (TQQQ/SOXL), these are correlated views of
+# the same underlying leverage, so a leveraged ETF gets nudged toward "Sell"
+# through several channels. That is intentional, not a bug: this is a tool for a
+# conservative investor learning the ropes, and penalizing leverage/volatility
+# in the Buy/Hold/Sell signal is a feature. If the app later needs a purely
+# directional signal, the cleaner move is to split volatility out into a
+# separate per-symbol risk view (mirroring the portfolio risk grade) rather than
+# to re-tune these weights.
 WEIGHTS: dict[str, float] = {
     "rsi": 0.13,
     "macd": 0.13,
