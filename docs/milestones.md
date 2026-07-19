@@ -61,15 +61,15 @@
 Sortino penalizes only downside volatility (better than Sharpe for conservative investors).
 Max drawdown shows worst peak-to-trough loss — critical for leveraged ETFs like TQQQ/SOXL.
 
-- [ ] `SortinoResult` model in `models.py` (value, risk_free_rate, interpretation)
-- [ ] `sortino_ratio()` in `math.py` — same signature as `sharpe_ratio()`, filter for negative returns in denominator
-- [ ] `MaxDrawdownResult` model in `models.py` (value as %, peak_date, trough_date)
-- [ ] `max_drawdown()` in `math.py` — running max vs current value over closes
-- [ ] Add normalization cases in `composite.py` for both new indicators
-- [ ] Rebalance composite weights (9 indicators instead of 7)
-- [ ] Tests for Sortino + max drawdown in `test_indicators.py`
-- [ ] Wire into `/api/symbols/{ticker}/indicators` endpoint
-- [ ] Frontend: add Sortino + max drawdown cards to indicator panel
+- [x] `SortinoResult` model in `models.py` (value, risk_free_rate, interpretation)
+- [x] `sortino_ratio()` in `math.py` — same signature as `sharpe_ratio()`, downside-deviation denominator (target semi-deviation, MAR = risk-free rate)
+- [x] `MaxDrawdownResult` model in `models.py` (value as %, peak_date, trough_date)
+- [x] `max_drawdown()` in `math.py` — running max vs current value over closes (takes closes + dates)
+- [x] Add normalization cases in `composite.py` for both new indicators
+- [x] Rebalance composite weights (9 indicators instead of 7)
+- [x] Tests for Sortino + max drawdown in `test_indicators.py`
+- [x] Wire into `/api/symbols/{ticker}/indicators` endpoint
+- [x] Frontend: add Sortino + max drawdown cards to indicator panel
 
 ## Milestone 5: Portfolio
 

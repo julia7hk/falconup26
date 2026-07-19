@@ -1,4 +1,4 @@
-"""Composite scoring — combine 7 indicators into Buy/Hold/Sell signal."""
+"""Composite scoring — combine 9 indicators into Buy/Hold/Sell signal."""
 
 from __future__ import annotations
 
@@ -8,20 +8,39 @@ from indicators.models import (
     BollingerResult,
     CompositeResult,
     MACDResult,
+    MaxDrawdownResult,
     RSIResult,
     SMACrossoverResult,
     SharpeResult,
+    SortinoResult,
 )
 
-# Weights must sum to 1.0
+# Weights must sum to 1.0.
+# Sharpe and Sortino are both risk-adjusted-return measures, so their combined
+# weight (0.24) is deliberately close to Sharpe's old solo weight (0.20) — we
+# split the budget between them rather than double-counting the same signal.
+#
+# DELIBERATE STANCE: the volatility/stability cluster — ATR (0.08),
+# Bollinger (0.08), beta (0.13), and max_drawdown (0.08), ~0.37 of the score —
+# treats low volatility as bullish and high volatility as bearish. For the
+# leveraged ETFs this app centers on (TQQQ/SOXL), these are correlated views of
+# the same underlying leverage, so a leveraged ETF gets nudged toward "Sell"
+# through several channels. That is intentional, not a bug: this is a tool for a
+# conservative investor learning the ropes, and penalizing leverage/volatility
+# in the Buy/Hold/Sell signal is a feature. If the app later needs a purely
+# directional signal, the cleaner move is to split volatility out into a
+# separate per-symbol risk view (mirroring the portfolio risk grade) rather than
+# to re-tune these weights.
 WEIGHTS: dict[str, float] = {
-    "rsi": 0.15,
-    "macd": 0.15,
-    "bollinger": 0.10,
-    "sma_crossover": 0.15,
-    "atr": 0.10,
-    "beta": 0.15,
-    "sharpe": 0.20,
+    "rsi": 0.13,
+    "macd": 0.13,
+    "bollinger": 0.08,
+    "sma_crossover": 0.13,
+    "atr": 0.08,
+    "beta": 0.13,
+    "sharpe": 0.12,
+    "sortino": 0.12,
+    "max_drawdown": 0.08,
 }
 
 
@@ -84,6 +103,17 @@ def normalize_signal(name: str, result: object) -> float:
     if isinstance(result, SharpeResult):
         # Sharpe 2+ -> +1, 1 -> +0.5, 0 -> 0, -1 -> -0.5
         return _clamp(result.value / 2)
+
+    if isinstance(result, SortinoResult):
+        # Same shape as Sharpe. Sortino runs a bit higher for the same series
+        # (smaller denominator), but 2+ -> strongly bullish still reads well.
+        return _clamp(result.value / 2)
+
+    if isinstance(result, MaxDrawdownResult):
+        # Drawdown is a stability signal, not directional: a shallow historical
+        # drawdown is mildly reassuring, a deep one is bearish.
+        #   10% -> +0.43, 25% -> 0, 60% -> -1.0
+        return _clamp((25 - result.value) / 35)
 
     raise ValueError(f"Unknown indicator: {name}")
 
@@ -148,11 +178,33 @@ def composite_score(
     )
 
 
+# Indicators that measure nearly the same thing and would otherwise cast
+# duplicate "votes" when tallying agreement. Sortino is Sharpe with a
+# downside-only denominator, so they almost always share a sign — counting both
+# would inflate confidence. Each group is collapsed into a single averaged vote.
+_CORRELATED_GROUPS: tuple[tuple[str, ...], ...] = (
+    ("sharpe", "sortino"),
+)
+
+
 def _indicator_agreement(contributions: dict[str, float]) -> float:
-    """Measure how much indicators agree (0 = split, 1 = unanimous)."""
+    """Measure how much indicators agree (0 = split, 1 = unanimous).
+
+    Correlated indicators (see ``_CORRELATED_GROUPS``) are merged into one vote
+    first, so a near-duplicate signal doesn't count twice and inflate confidence.
+    """
     if not contributions:
         return 0.0
-    signs = [1 if v > 0 else (-1 if v < 0 else 0) for v in contributions.values()]
+
+    votes = dict(contributions)
+    for group in _CORRELATED_GROUPS:
+        present = [name for name in group if name in votes]
+        if len(present) > 1:
+            combined = sum(votes.pop(name) for name in present)
+            # Represent the group as one vote at its net contribution.
+            votes["+".join(present)] = combined
+
+    signs = [1 if v > 0 else (-1 if v < 0 else 0) for v in votes.values()]
     non_zero = [s for s in signs if s != 0]
     if not non_zero:
         return 0.0
