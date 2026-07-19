@@ -55,7 +55,7 @@ export function CompositeCard({ indicators }: { indicators: IndicatorData }) {
       {expanded && (
         <div className="border-t border-inherit px-5 pb-5 pt-3">
           <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
-            This signal combines all 7 indicators into a single recommendation using a weighted average.
+            This signal combines all 9 indicators into a single recommendation using a weighted average.
             Each indicator is scored from -1 (bearish) to +1 (bullish), then multiplied by its weight.
             The composite score ({composite.score > 0 ? "+" : ""}{composite.score.toFixed(3)}) is the weighted average.
             {composite.signal === "buy"
@@ -76,7 +76,7 @@ export function CompositeCard({ indicators }: { indicators: IndicatorData }) {
                 : " it's high, meaning the indicators are mostly in agreement."}
           </p>
           <div className="mt-3 text-xs text-zinc-400">
-            <p className="font-medium">Weights: RSI 15% · MACD 15% · Bollinger 10% · SMA 15% · ATR 10% · Beta 15% · Sharpe 20%</p>
+            <p className="font-medium">Weights: RSI 13% · MACD 13% · Bollinger 8% · SMA 13% · ATR 8% · Beta 13% · Sharpe 12% · Sortino 12% · Max Drawdown 8%</p>
           </div>
         </div>
       )}

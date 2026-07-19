@@ -348,6 +348,22 @@ export default function Home() {
                       detail={`${indicators.indicators.sharpe.interpretation} (rf: ${indicators.indicators.sharpe.risk_free_rate}%)`}
                     />
                   )}
+                  {indicators.indicators.sortino && (
+                    <IndicatorCard
+                      name="Sortino Ratio"
+                      value={indicators.indicators.sortino.value.toFixed(2)}
+                      signal={indicators.composite.directions.sortino ?? "neutral"}
+                      detail={`${indicators.indicators.sortino.interpretation} — penalizes only downside volatility`}
+                    />
+                  )}
+                  {indicators.indicators.max_drawdown && (
+                    <IndicatorCard
+                      name="Max Drawdown"
+                      value={`-${indicators.indicators.max_drawdown.value.toFixed(1)}%`}
+                      signal={indicators.composite.directions.max_drawdown ?? "neutral"}
+                      detail={`Worst peak-to-trough: ${indicators.indicators.max_drawdown.peak_date} → ${indicators.indicators.max_drawdown.trough_date}`}
+                    />
+                  )}
                 </div>
 
                 <p className="text-xs text-zinc-400">
