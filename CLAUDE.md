@@ -29,7 +29,7 @@ Project goals (priority order): learning & resume > personal use > multi-user > 
 
 - `backend/` — FastAPI + Python 3.13 (API, indicator engine, portfolio risk engine, LLM explainer)
 - `backend/market/` — market data abstraction layer (provider protocol, yfinance impl, FRED macro data, Redis cache)
-- `backend/indicators/` — per-symbol indicator engine (models.py, math.py, composite.py). Pure functions, no DB dependency.
+- `backend/indicators/` — per-symbol indicator engine (models.py, math.py, composite.py). Pure functions, no DB dependency. 9 indicators: RSI, MACD, Bollinger, SMA crossover, ATR, beta, Sharpe, Sortino, max drawdown.
 - `backend/risk/` — portfolio-level risk engine (models.py, math.py). Pure functions: concentration (HHI), correlation matrix, effective leverage, portfolio beta, max drawdown, historical stress test, risk grade. No DB dependency.
 - `backend/routers/` — FastAPI route handlers (`symbols.py`, `macro.py`, `indicators.py`, `portfolio.py`, `risk.py`)
 - `backend/auth.py` — `get_current_user` FastAPI dependency. Reads Better Auth session cookie, looks up shared `session` table in Postgres, returns user dict or 401.
@@ -191,7 +191,7 @@ Future tables:
 
 ```
 models.py      → frozen dataclasses for each indicator result (RSIResult, MACDResult, etc.)
-math.py        → 7 pure functions (rsi, macd, bollinger_width, sma_crossover, atr, beta, sharpe_ratio)
+math.py        → 9 pure functions (rsi, macd, bollinger_width, sma_crossover, atr, beta, sharpe_ratio, sortino_ratio, max_drawdown)
                → helpers: _ema, _sma
 composite.py   → normalize_signal (each indicator → [-1,+1])
                → composite_score (weighted sum → Buy/Hold/Sell + confidence)
@@ -199,8 +199,9 @@ composite.py   → normalize_signal (each indicator → [-1,+1])
 
 - All math functions take `list[float]` and return a result dataclass. No DB, no side effects.
 - Beta requires SPY closes alongside the target symbol (pre-aligned by date via SQL JOIN).
-- Sharpe uses the fed funds rate from `macro_history` as the risk-free rate.
-- Composite weights: RSI 0.15, MACD 0.15, Bollinger 0.10, SMA 0.15, ATR 0.10, Beta 0.15, Sharpe 0.20.
+- Sharpe and Sortino use the fed funds rate from `macro_history` as the risk-free rate. Sortino penalizes only downside volatility (returns below the risk-free rate).
+- `max_drawdown` (indicator) takes closes + aligned dates, returns worst peak-to-trough as a positive %. Distinct from the portfolio-level `risk.math.max_drawdown` (same name, different module).
+- Composite weights: RSI 0.13, MACD 0.13, Bollinger 0.08, SMA 0.13, ATR 0.08, Beta 0.13, Sharpe 0.12, Sortino 0.12, Max Drawdown 0.08.
 - Missing indicators (insufficient data) are excluded and remaining weights re-normalized.
 - Endpoint: `GET /api/symbols/{ticker}/indicators` computes on-the-fly (no caching/persistence yet).
 
@@ -236,7 +237,7 @@ External APIs (yfinance, FRED)
 
 Postgres (price_history + macro_history)
   → indicators/math.py (pure computation, on-the-fly)
-  → /api/symbols/{ticker}/indicators (all 7 indicators + composite signal)
+  → /api/symbols/{ticker}/indicators (all 9 indicators + composite signal)
 
 Postgres (portfolio_holding + symbol + price_history) + live quotes
   → risk/math.py (pure computation, on-the-fly)

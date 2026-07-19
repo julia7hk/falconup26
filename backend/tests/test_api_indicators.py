@@ -85,7 +85,7 @@ def test_indicators_success():
     assert "computed_at" in data
     assert data["data_points"] == 300
 
-    # All 7 indicators should be present
+    # All 9 indicators should be present
     indicators = data["indicators"]
     assert "rsi" in indicators
     assert "macd" in indicators
@@ -94,6 +94,8 @@ def test_indicators_success():
     assert "atr" in indicators
     assert "beta" in indicators
     assert "sharpe" in indicators
+    assert "sortino" in indicators
+    assert "max_drawdown" in indicators
 
     # Composite should be present with required fields
     composite = data["composite"]

@@ -13,9 +13,11 @@ from indicators.models import (
     BetaResult,
     BollingerResult,
     MACDResult,
+    MaxDrawdownResult,
     RSIResult,
     SMACrossoverResult,
     SharpeResult,
+    SortinoResult,
 )
 
 
@@ -366,4 +368,105 @@ def sharpe_ratio(
         value=round(sharpe, 2),
         risk_free_rate=risk_free_annual,
         interpretation=interpretation,
+    )
+
+
+def sortino_ratio(
+    closes: list[float],
+    risk_free_annual: float,
+    trading_days: int = 252,
+) -> SortinoResult:
+    """Annualized Sortino ratio.
+
+    Same shape as :func:`sharpe_ratio`, but the denominator is *downside
+    deviation* — only returns below the risk-free rate (the minimum acceptable
+    return) contribute. Upside volatility is not treated as risk.
+
+    ``risk_free_annual`` should be a percentage (e.g. 5.33 for 5.33%).
+    """
+    if len(closes) < 2:
+        raise ValueError("Need at least 2 data points for Sortino ratio")
+
+    prices = np.array(closes)
+    daily_returns = np.diff(prices) / prices[:-1]
+
+    daily_rf = (risk_free_annual / 100) / trading_days
+    excess_returns = daily_returns - daily_rf
+
+    # Downside deviation: target semi-deviation with MAR = risk-free rate.
+    # Only negative excess returns count; positive ones are clamped to 0, and
+    # we divide by the full count (not just the losing days).
+    downside = np.minimum(excess_returns, 0.0)
+    downside_dev = np.sqrt(np.mean(downside**2))
+
+    if downside_dev == 0:
+        # No return fell below the risk-free rate in this window, so the ratio
+        # is mathematically undefined (zero denominator). We deliberately fall
+        # back to 0.0 (neutral) rather than treating it as strongly bullish:
+        # for a conservative-investor tool, a degenerate no-downside window is
+        # almost always a data artifact (too few points, a flat/illiquid
+        # series), not genuine evidence to buy. Mirrors sharpe_ratio's std==0
+        # handling. Real 60+ day daily data effectively never hits this.
+        sortino = 0.0
+    else:
+        sortino = (np.mean(excess_returns) / downside_dev) * np.sqrt(trading_days)
+
+    sortino = float(sortino)
+
+    if sortino >= 2.0:
+        interpretation = "excellent downside-adjusted return"
+    elif sortino >= 1.0:
+        interpretation = "good downside-adjusted return"
+    elif sortino >= 0:
+        interpretation = "positive but below-average downside-adjusted return"
+    else:
+        interpretation = "negative downside-adjusted return"
+
+    return SortinoResult(
+        value=round(sortino, 2),
+        risk_free_rate=risk_free_annual,
+        interpretation=interpretation,
+    )
+
+
+def max_drawdown(
+    closes: list[float],
+    dates: list[str],
+) -> MaxDrawdownResult:
+    """Worst peak-to-trough decline over the price series.
+
+    Walks the closes tracking the running maximum; the largest drop from a
+    running peak to a subsequent trough is the max drawdown. ``dates`` must be
+    aligned with ``closes`` (same length, chronological order).
+
+    Returns the drawdown as a positive percentage plus the peak/trough dates.
+    """
+    if len(closes) < 2:
+        raise ValueError("Need at least 2 data points for max drawdown")
+    if len(closes) != len(dates):
+        raise ValueError(
+            f"closes and dates must be same length: {len(closes)} vs {len(dates)}"
+        )
+
+    running_max = closes[0]
+    running_max_date = dates[0]
+    max_dd = 0.0
+    peak_date = dates[0]
+    trough_date = dates[0]
+
+    for price, d in zip(closes, dates):
+        if price > running_max:
+            running_max = price
+            running_max_date = d
+        if running_max > 0:
+            drawdown = (running_max - price) / running_max
+            if drawdown > max_dd:
+                max_dd = drawdown
+                peak_date = running_max_date
+                trough_date = d
+
+    return MaxDrawdownResult(
+        value=round(max_dd * 100, 2),
+        peak_date=peak_date,
+        trough_date=trough_date,
     )

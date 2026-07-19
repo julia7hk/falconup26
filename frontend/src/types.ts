@@ -61,6 +61,8 @@ export type IndicatorData = {
     atr?: { value: number; atr_percent: number };
     beta?: { value: number; interpretation: string };
     sharpe?: { value: number; risk_free_rate: number; interpretation: string };
+    sortino?: { value: number; risk_free_rate: number; interpretation: string };
+    max_drawdown?: { value: number; peak_date: string; trough_date: string };
   };
   composite: {
     score: number;
