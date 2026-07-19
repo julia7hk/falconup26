@@ -400,9 +400,13 @@ def sortino_ratio(
     downside_dev = np.sqrt(np.mean(downside**2))
 
     if downside_dev == 0:
-        # No return fell below the risk-free rate in this window. This is the
-        # degenerate case (mirrors sharpe_ratio's std==0 handling); real
-        # 1-year daily data effectively never hits it.
+        # No return fell below the risk-free rate in this window, so the ratio
+        # is mathematically undefined (zero denominator). We deliberately fall
+        # back to 0.0 (neutral) rather than treating it as strongly bullish:
+        # for a conservative-investor tool, a degenerate no-downside window is
+        # almost always a data artifact (too few points, a flat/illiquid
+        # series), not genuine evidence to buy. Mirrors sharpe_ratio's std==0
+        # handling. Real 60+ day daily data effectively never hits this.
         sortino = 0.0
     else:
         sortino = (np.mean(excess_returns) / downside_dev) * np.sqrt(trading_days)

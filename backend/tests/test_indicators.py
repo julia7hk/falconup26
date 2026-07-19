@@ -521,3 +521,20 @@ class TestCompositeConfidence:
         result = composite_score(results)
         unanimous = 0.5  # from the test above
         assert result.confidence < unanimous  # mixed signals = less confident
+
+    def test_correlated_indicators_dont_inflate_confidence(self):
+        """Sharpe + Sortino are near-duplicates; adding an agreeing Sortino to
+        an otherwise-split portfolio must NOT raise agreement (it's one vote,
+        not two)."""
+        from indicators.composite import _indicator_agreement
+        # One bullish (rsi), one bearish (macd), plus sharpe+sortino both bullish.
+        # Naive counting: 3 bullish / 1 bearish -> 0.5 majority.
+        # Merged: rsi(+), macd(-), sharpe+sortino(+) -> 2/3 -> 0.5 too here, so
+        # use a case where double-counting would clearly differ:
+        base = {"rsi": 0.1, "macd": -0.1, "beta": -0.1}  # 1 up, 2 down -> 1/3
+        without = _indicator_agreement(base)
+        with_corr = _indicator_agreement({**base, "sharpe": 0.1, "sortino": 0.1})
+        # sharpe+sortino collapse to ONE up vote -> 2 up, 2 down -> 0.0,
+        # not 3 up / 2 down (0.2) as double-counting would give.
+        assert with_corr == 0.0
+        assert without == pytest.approx(1 / 3)
