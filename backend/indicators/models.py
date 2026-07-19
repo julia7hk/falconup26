@@ -69,6 +69,34 @@ class SharpeResult:
 
 
 @dataclass(frozen=True, slots=True)
+class SortinoResult:
+    """Sortino ratio (1-year, annualized).
+
+    Like Sharpe, but the denominator only penalizes downside volatility
+    (returns below the risk-free rate). Better than Sharpe for conservative
+    investors and leveraged ETFs, where upside swings shouldn't count as "risk".
+    """
+
+    value: float
+    risk_free_rate: float  # annual rate used
+    interpretation: str
+
+
+@dataclass(frozen=True, slots=True)
+class MaxDrawdownResult:
+    """Worst peak-to-trough decline over the price history.
+
+    ``value`` is expressed as a positive percentage (e.g. 45.0 means the price
+    fell 45% from its peak). Critical for leveraged ETFs like TQQQ/SOXL, whose
+    drawdowns dwarf their underlying index.
+    """
+
+    value: float  # max drawdown as %, e.g. 45.0 means -45%
+    peak_date: str  # ISO date of the peak before the worst trough
+    trough_date: str  # ISO date of the trough
+
+
+@dataclass(frozen=True, slots=True)
 class CompositeResult:
     """Weighted composite of all indicators."""
 
