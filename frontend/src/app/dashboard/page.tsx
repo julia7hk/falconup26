@@ -16,6 +16,7 @@ import { ConcentrationPieChart } from "@/components/ConcentrationPieChart";
 import { CorrelationHeatmap } from "@/components/CorrelationHeatmap";
 import { LeverageGauge } from "@/components/LeverageGauge";
 import { StressScenarioCard } from "@/components/StressScenarioCard";
+import { HoldingSignalPanel } from "@/components/HoldingSignalPanel";
 
 type Status =
   | { kind: "idle" }
@@ -68,9 +69,10 @@ export default function DashboardPage() {
   const [editShares, setEditShares] = useState("");
   const [editAvgCost, setEditAvgCost] = useState("");
   const [portfolioError, setPortfolioError] = useState("");
-  const [holdingSignals, setHoldingSignals] = useState<
-    Record<string, { signal: string; confidence: number }>
+  const [holdingIndicators, setHoldingIndicators] = useState<
+    Record<string, IndicatorData>
   >({});
+  const [expandedTicker, setExpandedTicker] = useState<string | null>(null);
   const [riskData, setRiskData] = useState<RiskData | null>(null);
   const [correlationData, setCorrelationData] = useState<CorrelationData | null>(null);
   const [stressData, setStressData] = useState<StressData | null>(null);
@@ -94,22 +96,18 @@ export default function DashboardPage() {
       setPortfolio(data);
 
       const tickers = data.holdings.map((h) => h.ticker);
-      const signals: Record<string, { signal: string; confidence: number }> = {};
+      const indicators: Record<string, IndicatorData> = {};
       await Promise.all(
         tickers.map(async (ticker) => {
           try {
             const r = await fetch(`/api/symbols/${ticker}/indicators`);
             if (r.ok) {
-              const ind: IndicatorData = await r.json();
-              signals[ticker] = {
-                signal: ind.composite.signal,
-                confidence: ind.composite.confidence,
-              };
+              indicators[ticker] = await r.json();
             }
           } catch {}
         }),
       );
-      setHoldingSignals(signals);
+      setHoldingIndicators(indicators);
       if (data.holdings.length > 0) fetchRiskData();
     } catch {}
   }
@@ -447,6 +445,7 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   ) : (
+                    <>
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <div className="flex items-baseline gap-2">
@@ -461,18 +460,36 @@ export default function DashboardPage() {
                               {h.leverage_factor}x
                             </span>
                           )}
-                          {holdingSignals[h.ticker] && (
-                            <span
-                              className={`rounded px-1.5 py-0.5 text-xs font-semibold uppercase ${
-                                holdingSignals[h.ticker].signal === "buy"
+                          {holdingIndicators[h.ticker] && (
+                            <button
+                              type="button"
+                              aria-expanded={expandedTicker === h.ticker}
+                              title="Why this signal?"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpandedTicker(
+                                  expandedTicker === h.ticker ? null : h.ticker,
+                                );
+                              }}
+                              className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-semibold uppercase ${
+                                holdingIndicators[h.ticker].composite.signal === "buy"
                                   ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
-                                  : holdingSignals[h.ticker].signal === "sell"
+                                  : holdingIndicators[h.ticker].composite.signal === "sell"
                                     ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
                                     : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
                               }`}
                             >
-                              {holdingSignals[h.ticker].signal}
-                            </span>
+                              {holdingIndicators[h.ticker].composite.signal}
+                              <span className="font-normal opacity-70">
+                                {(
+                                  holdingIndicators[h.ticker].composite.confidence * 100
+                                ).toFixed(0)}
+                                %
+                              </span>
+                              <span aria-hidden className="text-[0.6rem]">
+                                {expandedTicker === h.ticker ? "▲" : "▼"}
+                              </span>
+                            </button>
                           )}
                         </div>
                         <p className="text-sm text-zinc-400">{h.name}</p>
@@ -539,6 +556,16 @@ export default function DashboardPage() {
                         </div>
                       </div>
                     </div>
+                    {expandedTicker === h.ticker && holdingIndicators[h.ticker] && (
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <HoldingSignalPanel
+                          holding={h}
+                          indicators={holdingIndicators[h.ticker]}
+                          totalValue={portfolio.total_value}
+                        />
+                      </div>
+                    )}
+                    </>
                   )}
                 </div>
               ))}

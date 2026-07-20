@@ -137,7 +137,7 @@ Better Auth + FastAPI session bridge. See [auth.md](auth.md) for architecture an
 ## Milestone 5.6: Mobile Layout + Polish
 
 - [x] Fix mobile layout — responsive padding, stacking grids, holdings cards, price history, symbol lookup
-- [ ] Per-holding signal dropdown — expand Buy/Hold/Sell badge to show why, personalized to the user's position (avg cost, position size, portfolio context). Precursor to M8 explainer.
+- [x] Per-holding signal dropdown — expand Buy/Hold/Sell badge to show why, personalized to the user's position (avg cost, position size, portfolio context). Precursor to M8 explainer. Shared `SignalBreakdown` component (symbol-level "why" + per-indicator contribution bars) reused by the symbol-detail card and the holding dropdown; `HoldingSignalPanel` adds deterministic position framing (P&L, portfolio weight, concentration nudge) with an explicit "signal ignores your entry price, not financial advice" guardrail.
 
 ## Milestone 6: Portfolio Risk Engine
 
