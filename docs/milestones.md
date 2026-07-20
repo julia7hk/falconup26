@@ -155,8 +155,36 @@ Depends on M5 (needs holdings to analyze).
 
 ## Milestone 7: What-If Analysis
 
-- [ ] `POST /api/portfolio/what-if` — accepts symbol + quantity, returns before/after risk metrics diff
-- [ ] Frontend: structured form (pick symbol + quantity), before/after comparison, visual diff of which metrics improved/worsened
+Depends on M6. Simulate a hypothetical trade (buy or sell) and show the before/after risk-metric diff.
+**No new math** — reuses the M6 risk engine by re-running it against a modified holdings list.
+
+### Backend — refactor to make the risk engine reusable
+
+- [ ] Extract the compute-from-data logic in `get_portfolio_risk` (`routers/risk.py`) into a helper `_compute_risk_metrics(data) -> dict` (concentration, leverage, beta renorm, correlation guard, drawdown, grade). Both `GET /risk` and `POST /what-if` call it, so the two can never diverge.
+- [ ] Extend `_fetch_portfolio_risk_data` to accept an **optional extra symbol** not currently held (buying something new needs its history/returns/beta/sector/leverage_factor/quote, which the held-only query doesn't fetch).
+
+### Backend — what-if endpoint
+
+- [ ] `POST /api/portfolio/what-if` — auth-gated. Body: `{ ticker, action: "buy" | "sell", quantity }`. Returns `{ before, after, diff }` where before/after are the full `_compute_risk_metrics` payloads.
+- [ ] Apply the trade to a copied holdings list: buy → `shares + qty` (append a new row if not held); sell → `shares - qty` (drop the row at 0). Recompute weights by market value from the modified shares.
+- [ ] Validation + edge cases: 404 if ticker not in `symbol` table; reject sell qty > shares owned; sell-to-zero removes the holding; degrade gracefully when the result leaves <2 holdings (correlation needs ≥2) or <60 days of history (drawdown/grade unavailable) — mirror the `None` handling already in `/risk`.
+- [ ] `diff` block: per-metric before/after + delta + a direction flag (improved / worsened / unchanged). Note the grade-direction convention (lower concentration/leverage/beta/drawdown = improved; higher grade score = improved).
+
+### Backend — tests (`tests/test_api_whatif.py`)
+
+- [ ] 401 without session cookie
+- [ ] Buy more of a held symbol → weights shift, grade recomputes
+- [ ] Buy a symbol not currently held → appended, metrics reflect it
+- [ ] Sell partial / sell-to-zero (holding removed) / oversell rejected
+- [ ] Empty portfolio + buy = single-holding portfolio (no correlation, graceful)
+
+### Frontend — what-if UI
+
+- [ ] Types: `WhatIfRequest`, `WhatIfResponse` (before/after/diff) in `types.ts`
+- [ ] Structured form on the dashboard: symbol picker (catalog/search) + buy/sell toggle + quantity. No free-text.
+- [ ] Before/after comparison — reuse `RiskGradeCard` for each side; show grade + key metrics side by side.
+- [ ] Visual diff — per metric, up/down arrow + green(improved)/red(worsened)/neutral, so the user sees at a glance what the trade does to their risk.
+- [ ] Framing: label it a simulation, educational-not-advice disclaimer (consistent with the M5.6 dropdown), and make clear it does **not** modify the real portfolio.
 
 ## Milestone 8: Explainer Layer
 
