@@ -2,14 +2,11 @@
 
 import { useState } from "react";
 import type { IndicatorData } from "@/types";
+import { SignalBreakdown } from "./SignalBreakdown";
 
 export function CompositeCard({ indicators }: { indicators: IndicatorData }) {
   const [expanded, setExpanded] = useState(false);
   const { composite } = indicators;
-  const directions = Object.values(composite.directions);
-  const bullishCount = directions.filter((d) => d === "bullish").length;
-  const bearishCount = directions.filter((d) => d === "bearish").length;
-  const neutralCount = directions.filter((d) => d === "neutral").length;
 
   return (
     <div
@@ -54,30 +51,7 @@ export function CompositeCard({ indicators }: { indicators: IndicatorData }) {
       </button>
       {expanded && (
         <div className="border-t border-inherit px-5 pb-5 pt-3">
-          <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
-            This signal combines all 9 indicators into a single recommendation using a weighted average.
-            Each indicator is scored from -1 (bearish) to +1 (bullish), then multiplied by its weight.
-            The composite score ({composite.score > 0 ? "+" : ""}{composite.score.toFixed(3)}) is the weighted average.
-            {composite.signal === "buy"
-              ? " A score above +0.15 triggers a Buy signal."
-              : composite.signal === "sell"
-                ? " A score below -0.15 triggers a Sell signal."
-                : " A score between -0.15 and +0.15 means Hold — no strong direction."}
-          </p>
-          <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
-            Right now, {bullishCount} indicator{bullishCount !== 1 ? "s" : ""} {bullishCount !== 1 ? "are" : "is"} bullish,
-            {" "}{bearishCount} {bearishCount !== 1 ? "are" : "is"} bearish
-            {neutralCount > 0 ? `, and ${neutralCount} ${neutralCount !== 1 ? "are" : "is"} neutral` : ""}.
-            {" "}Confidence ({(composite.confidence * 100).toFixed(0)}%) reflects how strongly the indicators agree —
-            {composite.confidence < 0.3
-              ? " it's low because the indicators are giving mixed signals. This means the data doesn't point clearly in one direction."
-              : composite.confidence < 0.6
-                ? " it's moderate, meaning most indicators lean the same way but there's some disagreement."
-                : " it's high, meaning the indicators are mostly in agreement."}
-          </p>
-          <div className="mt-3 text-xs text-zinc-400">
-            <p className="font-medium">Weights: RSI 13% · MACD 13% · Bollinger 8% · SMA 13% · ATR 8% · Beta 13% · Sharpe 12% · Sortino 12% · Max Drawdown 8%</p>
-          </div>
+          <SignalBreakdown composite={composite} />
         </div>
       )}
     </div>

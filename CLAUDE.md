@@ -21,7 +21,7 @@ Project goals (priority order): learning & resume > personal use > multi-user > 
 
 ## Current Status
 
-**Deployed** at `falconup.julia7hk.com` (oc40, Oracle Cloud Ampere ARM64). M1–M5.5 complete: project foundation, data sources, database, indicator engine, portfolio CRUD + frontend, auth + multi-tenancy. M6 (portfolio risk engine) complete: concentration, correlation, leverage, beta, drawdown, historical stress scenarios, transparent risk grade.
+**Deployed** at `falconup.julia7hk.com` (oc40, Oracle Cloud Ampere ARM64). M1–M5.5 complete: project foundation, data sources, database, indicator engine, portfolio CRUD + frontend, auth + multi-tenancy. M6 (portfolio risk engine) complete: concentration, correlation, leverage, beta, drawdown, historical stress scenarios, transparent risk grade. M5.6 complete: mobile layout polish + per-holding signal dropdown (expand the Buy/Hold/Sell badge into a personalized, deterministic "why" — position P&L, portfolio weight, per-indicator contribution breakdown; precursor to the M8 explainer).
 
 **Authentication is live.** Better Auth (Next.js) + FastAPI session bridge. Each user has their own portfolio. Public endpoints (`/api/symbols/*`, `/api/macro/*`) don't require auth. Portfolio endpoints (`/api/portfolio/*`) return 401 without a valid session. The main page is public — symbol catalog, indicators, lookup, and macro are visible without signing in; portfolio section only appears when logged in. See `docs/auth.md` for architecture.
 
@@ -36,7 +36,8 @@ Project goals (priority order): learning & resume > personal use > multi-user > 
 - `backend/db.py` — SQLAlchemy async engine + session factory (asyncpg driver). Defers engine creation if `DATABASE_URL` is not set (safe for CI import).
 - `backend/scripts/` — one-off CLI scripts (`seed.py`, `backfill.py`)
 - `backend/llm/` — structured LLM layer (prompts/, context.py, validator.py, cache.py, client.py) — not yet implemented
-- `frontend/` — Next.js 16 (App Router) + React 19 + TypeScript + Tailwind 4. Symbol catalog, sparkline charts, indicator panel, symbol lookup, macro snapshot, portfolio management (auth-gated).
+- `frontend/` — Next.js 16 (App Router) + React 19 + TypeScript + Tailwind 4. Symbol catalog, sparkline charts, indicator panel, symbol lookup, macro snapshot, portfolio management (auth-gated), per-holding signal dropdown.
+- `frontend/src/components/` — presentational React components. `SignalBreakdown` renders the symbol-level composite "why" (score explanation + per-indicator contribution bars) and is shared by the symbol-detail `CompositeCard` and the dashboard's `HoldingSignalPanel` (per-holding dropdown that adds deterministic position framing). Keep signal-explanation logic in `SignalBreakdown` so both surfaces stay consistent.
 - `frontend/src/lib/` — Prisma client (`db.ts`), Better Auth server config (`auth.ts`), Better Auth client (`auth-client.ts`)
 - `frontend/prisma/` — Prisma schema (introspected from DB, not hand-authored). Regenerate with `npx prisma db pull`.
 - `ops/` — Dockerfiles, Compose (`compose.build.yaml` for local dev, `compose.yaml` for production), nginx config
