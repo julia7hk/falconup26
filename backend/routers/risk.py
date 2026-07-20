@@ -38,23 +38,26 @@ router = APIRouter(prefix="/api/portfolio", tags=["risk"])
 # ---------------------------------------------------------------------------
 
 
-async def _fetch_portfolio_risk_data(
+async def _fetch_market_data(
     session: AsyncSession,
     user_id: str,
+    extra_tickers: list[str] | None = None,
 ) -> dict:
-    """Fetch everything needed for risk analysis in one pass.
+    """Fetch raw materials for risk analysis — DB queries + live quotes only.
 
-    Returns a dict with:
-        holdings: list of dicts (ticker, sector, leverage_factor, shares, avg_cost)
-        weights: list of floats (portfolio weight fractions, by market value)
-        tickers: list of ticker strings
-        returns_by_ticker: dict[ticker -> list[float]] (aligned daily returns)
-        spy_returns: list[float] (SPY daily returns, same dates)
-        betas: list[float] (per-holding beta vs SPY)
-        portfolio_value: float (total market value)
-        portfolio_values: list[float] (daily portfolio value series)
-        portfolio_dates: list[str] (dates for portfolio_values)
+    No derived risk structures (weights, returns, betas) are computed here; that
+    is `_build_risk_data`'s job, so a modified holdings list (what-if) can be
+    re-derived from the same materials. Returns:
+        held: list of holding dicts for the user's current positions
+              (ticker, symbol_id, sector, leverage_factor, shares, avg_cost)
+        symbol_meta: dict[ticker -> {symbol_id, name, sector, leverage_factor}]
+              for held symbols plus any resolvable `extra_tickers` (used when a
+              what-if buys a symbol not currently held)
+        quote_map: dict[ticker -> live price] for held + extra symbols
+        prices_by_ticker: dict[ticker -> {date_str: close}] for held + extra + SPY
     """
+    extra_tickers = extra_tickers or []
+
     # 1. Get user's holdings with symbol info
     result = await session.execute(
         text("""
@@ -69,12 +72,46 @@ async def _fetch_portfolio_risk_data(
     )
     rows = result.fetchall()
 
-    if not rows:
-        return {"empty": True}
+    held = [
+        {
+            "ticker": row.ticker,
+            "symbol_id": row.symbol_id,
+            "sector": row.sector,
+            "leverage_factor": float(row.leverage_factor),
+            "shares": float(row.shares),
+            "avg_cost": float(row.avg_cost),
+        }
+        for row in rows
+    ]
+    symbol_meta: dict[str, dict] = {
+        h["ticker"]: {
+            "symbol_id": h["symbol_id"],
+            "sector": h["sector"],
+            "leverage_factor": h["leverage_factor"],
+        }
+        for h in held
+    }
 
-    # 2. Fetch live quotes for market values
+    # 1b. Resolve any extra tickers not already held (for what-if buys)
+    wanted_extra = [t for t in extra_tickers if t not in symbol_meta]
+    if wanted_extra:
+        extra_result = await session.execute(
+            text("""
+                SELECT id AS symbol_id, ticker, name, sector, leverage_factor
+                FROM symbol WHERE ticker = ANY(:tickers)
+            """),
+            {"tickers": wanted_extra},
+        )
+        for row in extra_result.fetchall():
+            symbol_meta[row.ticker] = {
+                "symbol_id": row.symbol_id,
+                "sector": row.sector,
+                "leverage_factor": float(row.leverage_factor),
+            }
+
+    # 2. Fetch live quotes for market values (held + extra symbols)
     fetcher = get_price_fetcher()
-    tickers = [row.ticker for row in rows]
+    quote_tickers = list(symbol_meta.keys())
 
     async def _fetch_quote(ticker: str):
         try:
@@ -82,33 +119,13 @@ async def _fetch_portfolio_risk_data(
         except Exception:
             return None
 
-    quotes = await asyncio.gather(*(_fetch_quote(t) for t in tickers))
-    quote_map = dict(zip(tickers, quotes))
+    quotes = await asyncio.gather(*(_fetch_quote(t) for t in quote_tickers))
+    quote_map = {
+        t: (q.price if q else None) for t, q in zip(quote_tickers, quotes)
+    }
 
-    # Compute market values and weights
-    holdings = []
-    market_values = []
-    for row in rows:
-        quote = quote_map.get(row.ticker)
-        price = quote.price if quote else float(row.avg_cost)  # fallback to avg_cost
-        mv = float(row.shares) * price
-        market_values.append(mv)
-        holdings.append({
-            "ticker": row.ticker,
-            "symbol_id": row.symbol_id,
-            "sector": row.sector,
-            "leverage_factor": float(row.leverage_factor),
-            "shares": float(row.shares),
-            "avg_cost": float(row.avg_cost),
-            "price": price,
-            "market_value": mv,
-        })
-
-    total_value = sum(market_values)
-    weights = [mv / total_value for mv in market_values] if total_value > 0 else [1.0 / len(rows)] * len(rows)
-
-    # 3. Fetch price history for all holdings + SPY, last 5 years (for drawdown + stress)
-    symbol_ids = [row.symbol_id for row in rows]
+    # 3. Fetch price history for all fetched symbols + SPY, last 5 years
+    symbol_ids = [m["symbol_id"] for m in symbol_meta.values()]
     cutoff = date.today() - timedelta(days=365 * 5)
 
     # Get SPY symbol_id
@@ -120,26 +137,67 @@ async def _fetch_portfolio_risk_data(
     all_symbol_ids = list(set(symbol_ids + ([spy_row.id] if spy_row else [])))
 
     # Fetch all price history in one query
-    result = await session.execute(
-        text("""
-            SELECT s.ticker, ph.date, ph.close
-            FROM price_history ph
-            JOIN symbol s ON s.id = ph.symbol_id
-            WHERE ph.symbol_id = ANY(:symbol_ids) AND ph.date >= :cutoff
-            ORDER BY ph.date
-        """),
-        {"symbol_ids": all_symbol_ids, "cutoff": cutoff},
-    )
-    price_rows = result.fetchall()
-
-    # Organize by ticker -> {date_str: close}
     prices_by_ticker: dict[str, dict[str, float]] = {}
-    for pr in price_rows:
-        ticker_key = pr.ticker
-        date_str = pr.date.isoformat() if hasattr(pr.date, "isoformat") else str(pr.date)
-        prices_by_ticker.setdefault(ticker_key, {})[date_str] = float(pr.close)
+    if all_symbol_ids:
+        result = await session.execute(
+            text("""
+                SELECT s.ticker, ph.date, ph.close
+                FROM price_history ph
+                JOIN symbol s ON s.id = ph.symbol_id
+                WHERE ph.symbol_id = ANY(:symbol_ids) AND ph.date >= :cutoff
+                ORDER BY ph.date
+            """),
+            {"symbol_ids": all_symbol_ids, "cutoff": cutoff},
+        )
+        for pr in result.fetchall():
+            date_str = pr.date.isoformat() if hasattr(pr.date, "isoformat") else str(pr.date)
+            prices_by_ticker.setdefault(pr.ticker, {})[date_str] = float(pr.close)
 
-    # 4. Compute per-ticker date sets for flexible alignment
+    return {
+        "held": held,
+        "symbol_meta": symbol_meta,
+        "quote_map": quote_map,
+        "prices_by_ticker": prices_by_ticker,
+    }
+
+
+def _build_risk_data(
+    holdings_input: list[dict],
+    quote_map: dict[str, float | None],
+    prices_by_ticker: dict[str, dict[str, float]],
+) -> dict:
+    """Derive the risk-analysis data dict from a holdings list + raw materials.
+
+    Pure: no DB, no network. `holdings_input` is any list of positions (the
+    user's current holdings for `/risk`, or a post-trade copy for `/what-if`) —
+    each item needs ticker, sector, leverage_factor, shares, avg_cost. Returns
+    the dict consumed by `_compute_risk_metrics` (and by `/correlation`,
+    `/stress`). Returns `{"empty": True}` when there are no positions.
+    """
+    if not holdings_input:
+        return {"empty": True}
+
+    tickers = [h["ticker"] for h in holdings_input]
+
+    # Compute market values and weights (fall back to avg_cost if no live quote)
+    holdings = []
+    market_values = []
+    for h in holdings_input:
+        price = quote_map.get(h["ticker"])
+        if price is None:
+            price = h["avg_cost"]
+        mv = h["shares"] * price
+        market_values.append(mv)
+        holdings.append({**h, "price": price, "market_value": mv})
+
+    total_value = sum(market_values)
+    weights = (
+        [mv / total_value for mv in market_values]
+        if total_value > 0
+        else [1.0 / len(holdings_input)] * len(holdings_input)
+    )
+
+    # Compute per-ticker date sets for flexible alignment
     dates_by_ticker: dict[str, set[str]] = {}
     for t in tickers:
         if t in prices_by_ticker:
@@ -258,6 +316,32 @@ async def _fetch_portfolio_risk_data(
         "prices_by_ticker": prices_by_ticker,
         "data_days": len(sorted_dates),
     }
+
+
+async def _fetch_portfolio_risk_data(
+    session: AsyncSession,
+    user_id: str,
+) -> dict:
+    """Get the risk data for a user's current portfolio, ready to analyze.
+
+    This is a shortcut that runs the two steps back to back:
+      1. `_fetch_market_data` — load the user's holdings, live prices, and
+         price history from the DB.
+      2. `_build_risk_data` — turn all that into the numbers the risk math
+         needs (weights, returns, betas, etc.).
+
+    The read-only endpoints (`/risk`, `/correlation`, `/stress`) just want
+    "the current portfolio," so they call this and don't have to think about
+    the two steps. (What-if calls the two steps itself, because it needs to
+    run step 2 twice — once for the real portfolio and once for the pretend
+    one after a trade.) Returns `{"empty": True}` if the user owns nothing.
+    """
+    materials = await _fetch_market_data(session, user_id)
+    return _build_risk_data(
+        materials["held"],
+        materials["quote_map"],
+        materials["prices_by_ticker"],
+    )
 
 
 # ---------------------------------------------------------------------------
