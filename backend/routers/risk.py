@@ -261,28 +261,33 @@ async def _fetch_portfolio_risk_data(
 
 
 # ---------------------------------------------------------------------------
-# Endpoints
+# Shared risk computation
 # ---------------------------------------------------------------------------
 
 
-@router.get("/risk")
-async def get_portfolio_risk(
-    user: dict = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
-):
-    """Portfolio risk analysis: concentration, leverage, beta, drawdown, grade."""
-    data = await _fetch_portfolio_risk_data(session, user["id"])
+# Empty-portfolio risk payload (no holdings to analyze). Endpoints add
+# `computed_at` themselves so this stays a pure constant.
+_EMPTY_RISK_METRICS = {
+    "concentration": None,
+    "effective_leverage": None,
+    "portfolio_beta": None,
+    "max_drawdown": None,
+    "risk_grade": None,
+    "holdings_count": 0,
+    "data_days": 0,
+}
 
+
+def _compute_risk_metrics(data: dict) -> dict:
+    """Compute the full risk payload from a fetched data dict.
+
+    Pure computation over the output of `_fetch_portfolio_risk_data` (or a
+    modified copy of it, as the what-if endpoint produces) — no DB, no
+    network. Shared by `GET /risk` and `POST /what-if` so the two can never
+    diverge. Returns the metrics without `computed_at`; callers add that.
+    """
     if data["empty"]:
-        return {
-            "concentration": None,
-            "effective_leverage": None,
-            "portfolio_beta": None,
-            "max_drawdown": None,
-            "risk_grade": None,
-            "holdings_count": 0,
-            "computed_at": date.today().isoformat(),
-        }
+        return dict(_EMPTY_RISK_METRICS)
 
     conc = concentration(
         data["weights"],
@@ -342,6 +347,23 @@ async def get_portfolio_risk(
         "risk_grade": asdict(grade) if grade else None,
         "holdings_count": len(data["holdings"]),
         "data_days": data["data_days"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get("/risk")
+async def get_portfolio_risk(
+    user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Portfolio risk analysis: concentration, leverage, beta, drawdown, grade."""
+    data = await _fetch_portfolio_risk_data(session, user["id"])
+    return {
+        **_compute_risk_metrics(data),
         "computed_at": date.today().isoformat(),
     }
 
