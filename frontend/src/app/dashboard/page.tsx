@@ -17,6 +17,7 @@ import { CorrelationHeatmap } from "@/components/CorrelationHeatmap";
 import { LeverageGauge } from "@/components/LeverageGauge";
 import { StressScenarioCard } from "@/components/StressScenarioCard";
 import { HoldingSignalPanel } from "@/components/HoldingSignalPanel";
+import { WhatIfPanel } from "@/components/WhatIfPanel";
 
 type Status =
   | { kind: "idle" }
@@ -658,6 +659,8 @@ export default function DashboardPage() {
                 <p className="text-xs text-zinc-400">{stressData.disclaimer}</p>
               </div>
             )}
+
+            <WhatIfPanel holdings={portfolio.holdings} />
           </section>
         )}
         {portfolio && portfolio.holdings.length > 0 && riskLoading && !riskData && (

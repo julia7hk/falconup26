@@ -153,3 +153,28 @@ export type StressData = {
   portfolio_value: number;
   disclaimer: string;
 };
+
+export type WhatIfRequest = {
+  ticker: string;
+  action: "buy" | "sell";
+  quantity: number;
+};
+
+export type WhatIfDiffEntry = {
+  before: number | null;
+  after: number | null;
+  delta: number | null;
+  direction: "improved" | "worsened" | "unchanged" | "unavailable";
+  // Only present on the risk_grade entry.
+  before_grade?: string | null;
+  after_grade?: string | null;
+};
+
+export type WhatIfResponse = {
+  trade: WhatIfRequest;
+  // before/after reuse the RiskData shape (same _compute_risk_metrics payload).
+  before: RiskData;
+  after: RiskData;
+  diff: Record<string, WhatIfDiffEntry>;
+  disclaimer: string;
+};
