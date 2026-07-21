@@ -9,8 +9,10 @@ from datetime import date, timedelta
 
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Literal
 
 from auth import get_current_user
 from db import get_session
@@ -31,6 +33,17 @@ from risk.math import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/portfolio", tags=["risk"])
+
+
+# ---------- request bodies ----------
+
+
+class WhatIfRequest(BaseModel):
+    """A hypothetical trade to simulate against the user's current portfolio."""
+
+    ticker: str = Field(min_length=1, max_length=10)
+    action: Literal["buy", "sell"]
+    quantity: float = Field(gt=0)
 
 
 # ---------------------------------------------------------------------------
@@ -434,6 +447,53 @@ def _compute_risk_metrics(data: dict) -> dict:
     }
 
 
+# Which scalar inside each metric payload to diff, and whether a *lower* value
+# is an improvement (less risk). Risk grade is the exception: a higher score is
+# safer. Anything not listed here isn't compared (it's descriptive, not scored).
+_DIFF_METRICS = [
+    ("concentration", "herfindahl_index", True),
+    ("effective_leverage", "value", True),
+    ("portfolio_beta", "value", True),
+    ("max_drawdown", "value", True),
+    ("risk_grade", "score", False),
+]
+
+
+def _diff_risk_metrics(before: dict, after: dict) -> dict:
+    """Compare two risk payloads metric-by-metric.
+
+    For each scored metric, report the before/after value, the change, and a
+    plain direction flag: "improved", "worsened", "unchanged", or "unavailable"
+    (when the metric couldn't be computed on either side — e.g. correlation with
+    <2 holdings). "improved" means less risk, so for most metrics that's a lower
+    number, but for the risk grade it's a higher score.
+    """
+    diff: dict[str, dict] = {}
+    for metric, field, lower_is_better in _DIFF_METRICS:
+        b_obj, a_obj = before.get(metric), after.get(metric)
+        b = b_obj.get(field) if b_obj else None
+        a = a_obj.get(field) if a_obj else None
+
+        if b is None or a is None:
+            direction = "unavailable"
+            delta = None
+        else:
+            delta = a - b
+            if abs(delta) < 1e-9:
+                direction = "unchanged"
+            else:
+                improved = delta < 0 if lower_is_better else delta > 0
+                direction = "improved" if improved else "worsened"
+
+        entry = {"before": b, "after": a, "delta": delta, "direction": direction}
+        # Surface the letter grade too — it's what the user actually reads.
+        if metric == "risk_grade":
+            entry["before_grade"] = b_obj.get("grade") if b_obj else None
+            entry["after_grade"] = a_obj.get("grade") if a_obj else None
+        diff[metric] = entry
+    return diff
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -575,4 +635,93 @@ async def get_stress_test(
         "holdings_count": len(data["holdings"]),
         "portfolio_value": round(portfolio_value, 2),
         "disclaimer": "Based on historical data. Past performance does not predict future results.",
+    }
+
+
+@router.post("/what-if")
+async def what_if(
+    body: WhatIfRequest,
+    user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Simulate a buy/sell trade and return the before/after risk diff.
+
+    Never modifies the real portfolio. Fetches raw materials once (including the
+    target symbol's history in case it isn't held), computes risk for the current
+    portfolio ("before"), applies the trade to a copy ("after"), and diffs them.
+    """
+    ticker = body.ticker.upper()
+    materials = await _fetch_market_data(session, user["id"], extra_tickers=[ticker])
+
+    # The symbol must exist in our catalog (held or resolvable as an extra).
+    if ticker not in materials["symbol_meta"]:
+        raise HTTPException(status_code=404, detail=f"Symbol not in database: {ticker}")
+
+    quote_map = materials["quote_map"]
+    prices_by_ticker = materials["prices_by_ticker"]
+    held = materials["held"]
+
+    # "Before" = current portfolio.
+    before_data = _build_risk_data(held, quote_map, prices_by_ticker)
+
+    # "After" = a copy of the holdings with the trade applied.
+    after_holdings = [dict(h) for h in held]
+    existing = next((h for h in after_holdings if h["ticker"] == ticker), None)
+
+    if body.action == "buy":
+        if existing:
+            existing["shares"] += body.quantity
+        else:
+            # New position. Price it at the live quote, falling back to the most
+            # recent close if the quote is unavailable.
+            price = quote_map.get(ticker)
+            if price is None and prices_by_ticker.get(ticker):
+                price = prices_by_ticker[ticker][max(prices_by_ticker[ticker])]
+            if price is None:
+                raise HTTPException(
+                    status_code=400, detail=f"No price data available for {ticker}"
+                )
+            meta = materials["symbol_meta"][ticker]
+            after_holdings.append({
+                "ticker": ticker,
+                "symbol_id": meta["symbol_id"],
+                "sector": meta["sector"],
+                "leverage_factor": meta["leverage_factor"],
+                "shares": body.quantity,
+                "avg_cost": price,
+            })
+    else:  # sell
+        if not existing:
+            raise HTTPException(
+                status_code=400, detail=f"You don't own {ticker}, nothing to sell"
+            )
+        if body.quantity > existing["shares"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot sell {body.quantity} shares of {ticker}; you own {existing['shares']}",
+            )
+        if body.quantity == existing["shares"]:
+            after_holdings = [h for h in after_holdings if h["ticker"] != ticker]
+        else:
+            existing["shares"] -= body.quantity
+
+    after_data = _build_risk_data(after_holdings, quote_map, prices_by_ticker)
+
+    before_metrics = _compute_risk_metrics(before_data)
+    after_metrics = _compute_risk_metrics(after_data)
+
+    return {
+        "trade": {
+            "ticker": ticker,
+            "action": body.action,
+            "quantity": body.quantity,
+        },
+        "before": before_metrics,
+        "after": after_metrics,
+        "diff": _diff_risk_metrics(before_metrics, after_metrics),
+        "computed_at": date.today().isoformat(),
+        "disclaimer": (
+            "Simulation only — your portfolio is unchanged. Educational analysis, "
+            "not financial advice."
+        ),
     }
