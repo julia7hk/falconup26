@@ -589,6 +589,13 @@ export default function DashboardPage() {
           ) : null}
         </section>
 
+        {/* What-If Analysis — simulate a trade against the current portfolio */}
+        {portfolio && portfolio.holdings.length > 0 && (
+          <section className="border-t border-zinc-300 pt-6 dark:border-zinc-600">
+            <WhatIfPanel holdings={portfolio.holdings} />
+          </section>
+        )}
+
         {/* Portfolio Risk Analysis */}
         {portfolio && portfolio.holdings.length > 0 && riskData && (
           <section className="flex flex-col gap-4 border-t border-zinc-300 pt-6 dark:border-zinc-600">
@@ -659,8 +666,6 @@ export default function DashboardPage() {
                 <p className="text-xs text-zinc-400">{stressData.disclaimer}</p>
               </div>
             )}
-
-            <WhatIfPanel holdings={portfolio.holdings} />
           </section>
         )}
         {portfolio && portfolio.holdings.length > 0 && riskLoading && !riskData && (
