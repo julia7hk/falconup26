@@ -6,6 +6,9 @@ result dataclass.  No database, no network, no side effects.
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import numpy as np
 
 from risk.models import (
@@ -22,29 +25,16 @@ from risk.models import (
 # ---------------------------------------------------------------------------
 # Historical stress scenario date ranges
 # ---------------------------------------------------------------------------
+#
+# Curated real historical events, loaded from stress_scenarios.json (data, not
+# math — keeps this module's functions pure). Dates are immutable facts (a crash
+# bottom doesn't move), so a static file is a fine home. Longer term we want
+# these detected automatically from price history rather than hand-researched —
+# see docs/milestones.md "Automatic stress scenario detection".
 
-STRESS_SCENARIOS: dict[str, dict] = {
-    "covid_crash": {
-        "name": "COVID Crash",
-        "start": "2020-02-19",
-        "end": "2020-03-23",
-    },
-    "tech_selloff_2022": {
-        "name": "2022 Tech Selloff",
-        "start": "2022-01-03",
-        "end": "2022-10-12",
-    },
-    "q4_2018": {
-        "name": "2018 Q4 Selloff",
-        "start": "2018-10-03",
-        "end": "2018-12-24",
-    },
-    "recovery_2020": {
-        "name": "2020 Recovery",
-        "start": "2020-03-23",
-        "end": "2020-08-18",
-    },
-}
+_SCENARIOS_PATH = Path(__file__).with_name("stress_scenarios.json")
+
+STRESS_SCENARIOS: dict[str, dict] = json.loads(_SCENARIOS_PATH.read_text())
 
 
 # ---------------------------------------------------------------------------

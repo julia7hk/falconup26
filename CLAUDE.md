@@ -210,14 +210,14 @@ composite.py   → normalize_signal (each indicator → [-1,+1])
 
 ```
 models.py      → frozen dataclasses (ConcentrationResult, CorrelationResult, etc.)
-math.py        → 7 pure functions + predefined stress scenario date ranges
+math.py        → 7 pure functions (stress scenario date ranges loaded from stress_scenarios.json)
                → concentration, correlation_matrix, effective_leverage,
                → portfolio_beta, max_drawdown, historical_stress_test,
                → worst_period, risk_grade
 ```
 
 - All math functions take plain Python types (lists, dicts, floats) and return result dataclasses. No DB, no side effects.
-- Stress scenarios replay real historical events (COVID crash, 2022 tech selloff, etc.) using actual price data from `price_history`. No made-up shocks.
+- Stress scenarios replay real historical events (COVID crash, 2022 tech selloff, etc.) using actual price data from `price_history`. No made-up shocks. The curated scenario list is data, not math — it lives in `backend/risk/stress_scenarios.json` (loaded into `STRESS_SCENARIOS` at import) so `math.py` stays pure. Dates are still hand-picked; automatic detection is a backlog item (see `docs/milestones.md`).
 - Risk grade uses a transparent linear penalty system (100 - penalties = score). Each component (concentration, correlation, leverage, beta, drawdown) has a visible penalty with a plain-English reason.
 - Grade thresholds (harsh): A >= 80, B >= 65, C >= 50, D >= 35, F < 35.
 - Endpoints: `GET /api/portfolio/risk`, `GET /api/portfolio/correlation`, `GET /api/portfolio/stress?scenario=...`, `POST /api/portfolio/what-if` — all auth-gated.
