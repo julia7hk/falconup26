@@ -17,6 +17,7 @@ import { CorrelationHeatmap } from "@/components/CorrelationHeatmap";
 import { LeverageGauge } from "@/components/LeverageGauge";
 import { StressScenarioCard } from "@/components/StressScenarioCard";
 import { HoldingSignalPanel } from "@/components/HoldingSignalPanel";
+import { WhatIfPanel } from "@/components/WhatIfPanel";
 
 type Status =
   | { kind: "idle" }
@@ -587,6 +588,13 @@ export default function DashboardPage() {
             </div>
           ) : null}
         </section>
+
+        {/* What-If Analysis — simulate a trade against the current portfolio */}
+        {portfolio && portfolio.holdings.length > 0 && (
+          <section className="border-t border-zinc-300 pt-6 dark:border-zinc-600">
+            <WhatIfPanel holdings={portfolio.holdings} />
+          </section>
+        )}
 
         {/* Portfolio Risk Analysis */}
         {portfolio && portfolio.holdings.length > 0 && riskData && (
