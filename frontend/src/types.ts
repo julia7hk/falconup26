@@ -176,5 +176,8 @@ export type WhatIfResponse = {
   before: RiskData;
   after: RiskData;
   diff: Record<string, WhatIfDiffEntry>;
+  // Caveats about the comparison (e.g. drawdown not comparable for a
+  // shorter-history buy). Empty when the whole diff is comparable.
+  notes: string[];
   disclaimer: string;
 };

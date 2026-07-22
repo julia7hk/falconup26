@@ -424,6 +424,13 @@ def _compute_risk_metrics(data: dict) -> dict:
     }
 
 
+# Drawdown/grade comparability threshold (what-if). The portfolio value series
+# spans the date-intersection of its holdings, so buying a shorter-history symbol
+# shrinks the "after" window. If the after window drops below this fraction of the
+# before window, the two drawdowns cover different periods and can't be compared.
+_MIN_COMPARABLE_WINDOW = 0.9
+
+
 # Which scalar inside each metric payload to diff, and whether a *lower* value
 # is an improvement (less risk). Risk grade is the exception: a higher score is
 # safer. Anything not listed here isn't compared (it's descriptive, not scored).
@@ -687,6 +694,30 @@ async def what_if(
     before_metrics = _compute_risk_metrics(before_data)
     after_metrics = _compute_risk_metrics(after_data)
 
+    # Drawdown-window comparability (code-review #1): buying a shorter-history
+    # symbol shrinks the "after" date window, so its drawdown would be measured
+    # over a shorter period than "before" — a newer symbol then looks safer only
+    # because its window excludes older crashes. When the window shrinks
+    # materially, null the after drawdown and grade so the diff reports them as
+    # not-comparable instead of a misleading improvement. Concentration,
+    # leverage, and beta are unaffected and stay comparable.
+    notes: list[str] = []
+    before_days = before_metrics["data_days"]
+    after_days = after_metrics["data_days"]
+    if (
+        before_metrics["max_drawdown"] is not None
+        and before_days > 0
+        and after_days < before_days * _MIN_COMPARABLE_WINDOW
+    ):
+        after_metrics["max_drawdown"] = None
+        after_metrics["risk_grade"] = None
+        notes.append(
+            f"Drawdown and grade can't be compared for this trade: {ticker} has a "
+            f"shorter price history ({after_days} vs {before_days} overlapping days), "
+            "so the simulated window excludes older market crashes. Concentration, "
+            "leverage, and beta remain comparable."
+        )
+
     return {
         "trade": {
             "ticker": ticker,
@@ -696,6 +727,7 @@ async def what_if(
         "before": before_metrics,
         "after": after_metrics,
         "diff": _diff_risk_metrics(before_metrics, after_metrics),
+        "notes": notes,
         "computed_at": date.today().isoformat(),
         "disclaimer": (
             "Simulation only — your portfolio is unchanged. Educational analysis, "

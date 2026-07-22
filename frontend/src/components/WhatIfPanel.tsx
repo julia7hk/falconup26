@@ -236,6 +236,16 @@ export function WhatIfPanel({ holdings }: { holdings: Holding[] }) {
                 </div>
               </div>
 
+              {result.notes.length > 0 && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/40">
+                  {result.notes.map((note, i) => (
+                    <p key={i} className="text-xs text-amber-700 dark:text-amber-300">
+                      ⚠ {note}
+                    </p>
+                  ))}
+                </div>
+              )}
+
               <p className="text-xs text-zinc-400">{result.disclaimer}</p>
             </div>
           )}
