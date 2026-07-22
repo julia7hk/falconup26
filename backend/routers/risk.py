@@ -227,21 +227,6 @@ def _build_risk_data(
         all_dates = all_dates & spy_date_set
     sorted_dates = sorted(all_dates) if all_dates else []
 
-    # Per-pair correlation uses pairwise date intersection (fix #3: ragged histories)
-    returns_by_ticker: dict[str, list[float]] = {}
-    # For correlation, compute returns on each ticker's own full date range
-    for t in tickers:
-        if t not in prices_by_ticker:
-            continue
-        t_dates_sorted = sorted(dates_by_ticker[t])
-        if len(t_dates_sorted) < 2:
-            continue
-        closes = [prices_by_ticker[t][d] for d in t_dates_sorted]
-        returns = [(closes[i] - closes[i - 1]) / closes[i - 1]
-                   for i in range(1, len(closes)) if closes[i - 1] != 0]
-        if returns:
-            returns_by_ticker[t] = returns
-
     # For correlation_matrix, we need aligned returns — build pairwise-aligned
     # returns dict using pairwise date intersections
     corr_returns: dict[str, list[float]] = {}
@@ -261,12 +246,6 @@ def _build_risk_data(
                            for i in range(1, len(closes)) if closes[i - 1] != 0]
                 if returns:
                     corr_returns[t] = returns
-
-    spy_returns = []
-    if "SPY" in prices_by_ticker and len(sorted_dates) >= 2:
-        spy_closes = [prices_by_ticker["SPY"][d] for d in sorted_dates]
-        spy_returns = [(spy_closes[i] - spy_closes[i - 1]) / spy_closes[i - 1]
-                       for i in range(1, len(spy_closes)) if spy_closes[i - 1] != 0]
 
     # 5. Compute per-symbol betas (fix #5: None instead of silent 1.0 fallback)
     betas: list[float | None] = []
@@ -319,9 +298,7 @@ def _build_risk_data(
         "holdings": holdings,
         "weights": weights,
         "tickers": tickers,
-        "returns_by_ticker": returns_by_ticker,
         "corr_returns": corr_returns,
-        "spy_returns": spy_returns,
         "betas": betas,
         "portfolio_value": total_value,
         "portfolio_values": portfolio_values,
