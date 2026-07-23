@@ -188,26 +188,36 @@ Depends on M6. Simulate a hypothetical trade (buy or sell) and show the before/a
 
 ## Milestone 8: Explainer Layer
 
-### Deterministic Explainers (always available, no API dependency)
+Plan + architecture: [explainer.md](explainer.md). v1 scope: risk grade only. Ships as
+PR1 (deterministic, no API) then PR2 (LLM enrichment on top).
 
-- [ ] Per-indicator plain-English templates ("RSI is 28 — below 30 indicates oversold, which is a bullish signal")
-- [ ] Overall signal rationale ("3 of 7 indicators are bullish, 2 bearish, 2 neutral → Hold with low confidence")
-- [ ] Portfolio risk templates — concentration, leverage, correlation summaries as formatted strings
+### PR1 — Deterministic explainer (no API dependency)
 
-### Structured LLM Explainer (enriches deterministic layer)
+- [ ] `backend/llm_explainer/templates.py` — pure functions: risk-grade data (grade + per-component penalty reasons from `risk_grade`) → plain-English strings. No I/O.
+- [ ] Tests for `templates.py` — assert phrasing + that every number/ticker traces to input.
+- [ ] `GET /api/portfolio/risk/explain` in `routers/risk.py` — auth-gated; returns the deterministic explanation payload.
+- [ ] Backend test for the endpoint (auth + shape).
+- [ ] Frontend: "Explain" surface on the risk grade card renders the payload, with a not-financial-advice disclaimer.
+- [ ] Verify end-to-end (drive the real Explain flow), then ship.
 
-Architecture: LLM never computes anything. It translates structured risk data
-into personalized, contextual explanations. No chat box, no free-text input.
+### PR2 — Structured LLM enrichment (on top of PR1)
 
-- [ ] Prompt template module (`backend/llm/prompts/`) — versioned, tested prompt templates per analysis type
-- [ ] Context assembler (`backend/llm/context.py`) — takes typed risk data, formats into structured prompt context
-- [ ] Output validator (`backend/llm/validator.py`) — reject hallucinated tickers, enforce output structure
-- [ ] Deterministic fallback — if LLM unavailable or validation fails, serve template-string explanations (app never gates on LLM)
-- [ ] Response cache (`backend/llm/cache.py`) — keyed on (prompt_version, data_hash), no redundant API calls
-- [ ] API client (`backend/llm/client.py`) — thin wrapper with retry, timeout, rate limiting
-- [ ] Migration: `llm_analysis_cache` table
-- [ ] Education framing — all outputs wrapped with disclaimer, framed as education not financial advice
-- [ ] Frontend: "Explain" button on risk metrics and indicator cards
+LLM never computes — it rephrases the structured risk data. No chat box, no free-text input.
+
+- [ ] `.env` / `.env.example` + Docker build/runtime: `ANTHROPIC_API_KEY`.
+- [ ] `backend/llm_explainer/client.py` — thin `anthropic` wrapper (model `claude-opus-4-8`, adaptive thinking, `messages.parse()` schema, refusal/timeout/retry handling).
+- [ ] `backend/llm_explainer/context.py` — assemble structured risk data into prompt context (no user free-text).
+- [ ] `backend/llm_explainer/prompts/v1/` — versioned prompt template for the risk-grade explanation.
+- [ ] `backend/llm_explainer/validator.py` — reject hallucinated tickers/numbers (must appear in input) → fall back to PR1 text.
+- [ ] Migration: `llm_analysis_cache` table.
+- [ ] `backend/llm_explainer/cache.py` — keyed on `(prompt_version, data_hash)`; invalidate when data changes.
+- [ ] Wire enrichment into `/api/portfolio/risk/explain`: LLM when available + valid, else PR1 deterministic text (seamless).
+- [ ] Tests: validator rejects bad output; fallback serves deterministic text on refusal/no-key/timeout; cache hit path.
+- [ ] Verify end-to-end with and without the API key set, then ship.
+
+### Later (out of v1 scope)
+
+- [ ] Extend explainer to per-holding signal + per-indicator ("RSI is 28 → oversold, bullish"; "3 of 9 bullish → Hold, low confidence").
 
 ## Milestone 9: Data Pipeline
 

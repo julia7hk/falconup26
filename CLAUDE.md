@@ -35,7 +35,7 @@ Project goals (priority order): learning & resume > personal use > multi-user > 
 - `backend/auth.py` — `get_current_user` FastAPI dependency. Reads Better Auth session cookie, looks up shared `session` table in Postgres, returns user dict or 401.
 - `backend/db.py` — SQLAlchemy async engine + session factory (asyncpg driver). Defers engine creation if `DATABASE_URL` is not set (safe for CI import).
 - `backend/scripts/` — one-off CLI scripts (`seed.py`, `backfill.py`)
-- `backend/llm/` — structured LLM layer (prompts/, context.py, validator.py, cache.py, client.py) — not yet implemented
+- `backend/llm_explainer/` — structured LLM layer (prompts/, context.py, validator.py, cache.py, client.py) — not yet implemented
 - `frontend/` — Next.js 16 (App Router) + React 19 + TypeScript + Tailwind 4. Symbol catalog, sparkline charts, indicator panel, symbol lookup, macro snapshot, portfolio management (auth-gated), per-holding signal dropdown, what-if trade simulator.
 - `frontend/src/components/` — presentational React components. `SignalBreakdown` renders the symbol-level composite "why" (score explanation + per-indicator contribution bars) and is shared by the symbol-detail `CompositeCard` and the dashboard's `HoldingSignalPanel` (per-holding dropdown that adds deterministic position framing). Keep signal-explanation logic in `SignalBreakdown` so both surfaces stay consistent. `WhatIfPanel` (in the Risk Analysis section) posts a hypothetical trade to `/api/portfolio/what-if` and renders the before/after diff, reusing `RiskGradeCard`.
 - `frontend/src/lib/` — Prisma client (`db.ts`), Better Auth server config (`auth.ts`), Better Auth client (`auth-client.ts`)
