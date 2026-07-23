@@ -193,12 +193,12 @@ PR1 (deterministic, no API) then PR2 (LLM enrichment on top).
 
 ### PR1 — Deterministic explainer (no API dependency)
 
-- [ ] `backend/llm_explainer/templates.py` — pure functions: risk-grade data (grade + per-component penalty reasons from `risk_grade`) → plain-English strings. No I/O.
-- [ ] Tests for `templates.py` — assert phrasing + that every number/ticker traces to input.
-- [ ] `GET /api/portfolio/risk/explain` in `routers/risk.py` — auth-gated; returns the deterministic explanation payload.
-- [ ] Backend test for the endpoint (auth + shape).
-- [ ] Frontend: "Explain" surface on the risk grade card renders the payload, with a not-financial-advice disclaimer.
-- [ ] Verify end-to-end (drive the real Explain flow), then ship.
+- [x] `backend/llm_explainer/templates.py` — pure functions: risk-grade data (grade + per-component penalty reasons from `risk_grade`) → plain-English strings. No I/O.
+- [x] Tests for `templates.py` — assert phrasing + that every number/ticker traces to input.
+- [x] `GET /api/portfolio/risk/explain` in `routers/risk.py` — auth-gated; returns the deterministic explanation payload.
+- [x] Backend test for the endpoint (auth + shape).
+- [x] Frontend: "Explain" surface on the risk grade card renders the payload, with a not-financial-advice disclaimer.
+- [x] Verify end-to-end (drive the real Explain flow), then ship.
 
 ### PR2 — Structured LLM enrichment (on top of PR1)
 
