@@ -131,6 +131,34 @@ export type RiskData = {
   holdings_count: number;
 };
 
+export type RiskExplanationComponent = {
+  key: string;
+  label: string;
+  penalty: number;
+  max_penalty: number;
+  severity: "none" | "low" | "moderate" | "high" | "severe";
+  meaning: string; // educational "what this measures" (no figures)
+  detail: string; // the engine's factual reason + a severity phrase
+};
+
+export type RiskExplanation = {
+  grade: string;
+  score: number;
+  headline: string;
+  overview: string;
+  components: RiskExplanationComponent[];
+  disclaimer: string;
+};
+
+// GET /api/portfolio/risk/explain. `available` is false (with a `message`)
+// when no grade could be computed — no holdings, or <60 days of history.
+export type RiskExplainResponse = {
+  available: boolean;
+  message: string | null;
+  explanation: RiskExplanation | null;
+  computed_at: string;
+};
+
 export type CorrelationData = {
   matrix: Record<string, Record<string, number>>;
   avg_pairwise: number | null;
