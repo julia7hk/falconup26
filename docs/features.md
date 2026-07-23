@@ -81,6 +81,15 @@ Status reflects what's shipped to prod. See
 
 ## V1 — "growth"
 
+- [ ] Recommendation / action layer — turn the risk diagnosis into a ranked,
+      simulated prescription: map flagged risk components (concentration,
+      correlation, etc.) to candidate buys from the seeded catalog, score each
+      by running it through the M7 what-if engine (actual grade improvement),
+      and rank by impact per dollar — so "with your next paycheck, the
+      highest-impact move is…". Deterministic-first, buy-only in v1 (no taxable
+      event, no per-lot tracking needed), risk-optimizing (never return-
+      predicting), framed as educational scenarios with the simulated proof,
+      not directives. Design + open questions: [recommendations.md](recommendations.md).
 - [ ] Google sign-in (OAuth) — coexists with email/password via Better
       Auth account linking (same email can have both providers). Requires
       Google Cloud Console OAuth app.

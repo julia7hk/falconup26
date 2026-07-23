@@ -230,6 +230,31 @@ into personalized, contextual explanations. No chat box, no free-text input.
 - [ ] robots.txt + sitemap
 - [ ] Lighthouse audit (perf, a11y, best practices)
 
+## Milestone 11: Recommendation / Action Layer
+
+Design + open questions: [recommendations.md](recommendations.md). Builds on M6
+(risk engine), M7 (what-if = the ranking primitive), M8 (explainer). Ships
+PR1 (deterministic) then PR2 (LLM rephrases the ranked suggestions).
+
+### PR1 — Deterministic recommender (no API dependency)
+
+- [ ] Candidate generation: search the seeded `symbol` catalog — each symbol as a hypothetical contribution-sized buy.
+- [ ] Score each candidate via the what-if engine (Δ risk-grade score); rank by improvement per dollar. Buy-only (no taxable event, no per-lot tracking needed).
+- [ ] Map the ranked buys back to the flagged risk component for a plain-English "why" (reuse M8 template pattern).
+- [ ] Endpoint `GET /api/portfolio/risk/recommendations` — auth-gated; optional `contribution` amount; returns top-N ranked, each with its simulated before/after.
+- [ ] Tests: deterministic ranking, candidates only from catalog, buy-only, framing (educational scenario, not directive).
+- [ ] Frontend: "Ways to improve" surface under the risk grade — ranked suggestions with simulated Δgrade + prominent not-financial-advice disclaimer.
+
+### PR2 — LLM enrichment (on top of PR1)
+
+- [ ] LLM rephrases the ranked, already-simulated suggestions; validator rejects any ticker/number not in the structured input; falls back to PR1.
+
+### Deferred (later increments)
+
+- [ ] Sell-side recommendations + per-lot tax awareness (needs purchase-date / `lot` schema; short-term vs long-term capital-gains warning).
+- [ ] Contribution cadence persistence (amount + frequency) rather than a one-off amount.
+- [ ] Account-type awareness (taxable vs Roth/IRA) — ties into V2 multi-portfolio.
+
 ## Backlog (separate PRs)
 
 - [ ] Replace raw SQL `text()` queries with SQLAlchemy ORM models (sqlacodegen → generated models). Currently the entire backend uses `text()` consistently; this is a codebase-wide refactor, not tied to any feature milestone.
