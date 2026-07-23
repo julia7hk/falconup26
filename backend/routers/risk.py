@@ -17,6 +17,7 @@ from typing import Literal
 from auth import get_current_user
 from db import get_session
 from indicators.math import beta as compute_beta
+from llm_explainer.templates import explain_grade
 from market import get_price_fetcher
 from risk.math import (
     STRESS_SCENARIOS,
@@ -492,6 +493,47 @@ async def get_portfolio_risk(
     data = await _fetch_portfolio_risk_data(session, user["id"])
     return {
         **_compute_risk_metrics(data),
+        "computed_at": date.today().isoformat(),
+    }
+
+
+@router.get("/risk/explain")
+async def explain_portfolio_risk(
+    user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Plain-English explanation of the portfolio risk grade.
+
+    Deterministic, no external API — the always-on baseline explainer (M8 PR1).
+    Reuses the same `_compute_risk_metrics` payload `/risk` returns, so the text
+    can never describe a different grade than the card shows. When the grade
+    can't be computed (no holdings, or under 60 days of aligned history) the
+    payload reports `available: false` with a message instead of prose.
+    """
+    data = await _fetch_portfolio_risk_data(session, user["id"])
+    metrics = _compute_risk_metrics(data)
+    grade = metrics["risk_grade"]
+
+    if grade is None:
+        if metrics["holdings_count"] == 0:
+            message = "Add holdings to your portfolio to see a risk explanation."
+        else:
+            message = (
+                "A risk grade needs at least 60 days of overlapping price "
+                "history across your holdings. Once there's enough data, an "
+                "explanation will appear here."
+            )
+        return {
+            "available": False,
+            "message": message,
+            "explanation": None,
+            "computed_at": date.today().isoformat(),
+        }
+
+    return {
+        "available": True,
+        "message": None,
+        "explanation": explain_grade(grade),
         "computed_at": date.today().isoformat(),
     }
 
