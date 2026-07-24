@@ -188,6 +188,14 @@ def _input_number_corpus(grade: dict) -> str:
 
 
 def _output_text(ex: dict) -> str:
+    """The traceability-checked surface: the *dynamic* fields only.
+
+    Deliberately excludes the static `meaning` copy, which is trusted, fixed
+    prose and may carry illustrative numbers ("2x or 3x ETFs") that describe the
+    concept rather than this portfolio. PR2's LLM validator must scope the same
+    way — only fields the model rephrases from the structured input get the
+    number-traceability guard, never the static educational copy.
+    """
     parts = [ex["headline"], ex["overview"]]
     for s in ex["components"]:
         parts += [s["detail"], str(s["penalty"]), str(s["max_penalty"])]

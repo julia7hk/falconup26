@@ -6,17 +6,27 @@ explainer — the project's core promise that a beginner can *learn* from the
 risk grade, not just see a letter. PR2's LLM layer rephrases the same
 structured data and falls back to these exact strings on any failure.
 
-Design rule (non-negotiable): every number and ticker in the output traces to
-the input payload. The educational framing is static prose; all figures come
-straight from the `risk_grade` payload the engine already computed (mostly by
-reusing its per-component `reason` strings verbatim). The text can never claim
-a figure the risk engine didn't produce.
+Design rule (non-negotiable): every *portfolio-specific* figure and ticker in
+the output traces to the input payload. Those live only in the dynamic fields
+(`headline`, `overview`, `detail`, and the numeric `penalty`/`score`), which
+reuse the engine's per-component `reason` strings verbatim — so the text can
+never claim a portfolio figure the risk engine didn't produce.
+
+The static educational copy (`_COMPONENTS[*].meaning`) is trusted, fixed prose
+and may contain *illustrative* numbers ("2x or 3x ETFs", "a beta above 1") that
+describe the concept, not this portfolio. It is not subject to the traceability
+guard. This scoping matters for PR2: the LLM validator must check the dynamic
+fields the same way (see `tests/test_explainer_templates.py::_output_text`),
+not the static copy — running number-traceability over an LLM-rephrased
+`meaning` would wrongly reject those legitimate illustrative figures.
 """
 
 from __future__ import annotations
 
 # ---------------------------------------------------------------------------
-# Static educational copy (contains no figures — numbers come from the input)
+# Static educational copy. Trusted, fixed prose. May contain illustrative
+# numbers (e.g. "2x or 3x ETFs") that describe the concept, NOT this portfolio
+# — portfolio-specific figures only ever come from the input payload.
 # ---------------------------------------------------------------------------
 
 # Human labels + a beginner-friendly "what this measures" for each component of
