@@ -8,7 +8,6 @@ import type {
   IndicatorData,
   Portfolio,
   RiskData,
-  RiskExplainResponse,
   CorrelationData,
   StressData,
 } from "@/types";
@@ -77,7 +76,6 @@ export default function DashboardPage() {
   >({});
   const [expandedTicker, setExpandedTicker] = useState<string | null>(null);
   const [riskData, setRiskData] = useState<RiskData | null>(null);
-  const [riskExplain, setRiskExplain] = useState<RiskExplainResponse | null>(null);
   const [correlationData, setCorrelationData] = useState<CorrelationData | null>(null);
   const [stressData, setStressData] = useState<StressData | null>(null);
   const [riskLoading, setRiskLoading] = useState(false);
@@ -119,14 +117,12 @@ export default function DashboardPage() {
   async function fetchRiskData() {
     setRiskLoading(true);
     try {
-      const [riskRes, explainRes, corrRes, stressRes] = await Promise.all([
+      const [riskRes, corrRes, stressRes] = await Promise.all([
         fetch("/api/portfolio/risk", { credentials: "include" }),
-        fetch("/api/portfolio/risk/explain", { credentials: "include" }),
         fetch("/api/portfolio/correlation", { credentials: "include" }),
         fetch("/api/portfolio/stress?scenario=all", { credentials: "include" }),
       ]);
       if (riskRes.ok) setRiskData(await riskRes.json());
-      if (explainRes.ok) setRiskExplain(await explainRes.json());
       if (corrRes.ok) setCorrelationData(await corrRes.json());
       if (stressRes.ok) setStressData(await stressRes.json());
     } catch {}
@@ -613,8 +609,8 @@ export default function DashboardPage() {
 
             {riskData.risk_grade && <RiskGradeCard grade={riskData.risk_grade} />}
 
-            {riskExplain?.available && riskExplain.explanation && (
-              <RiskExplainCard explanation={riskExplain.explanation} />
+            {riskData.risk_grade_explanation && (
+              <RiskExplainCard explanation={riskData.risk_grade_explanation} />
             )}
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

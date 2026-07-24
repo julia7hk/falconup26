@@ -128,6 +128,9 @@ export type RiskData = {
     components: Record<string, { penalty: number; max_penalty: number; reason: string }>;
     interpretation: string;
   } | null;
+  // Deterministic plain-English explanation of risk_grade, folded into the
+  // /risk payload so the dashboard needn't re-fetch. Null when there's no grade.
+  risk_grade_explanation: RiskExplanation | null;
   holdings_count: number;
 };
 

@@ -116,3 +116,19 @@ class TestRiskExplain:
         assert risk["risk_grade"] is not None
         assert explain["explanation"]["grade"] == risk["risk_grade"]["grade"]
         assert explain["explanation"]["score"] == risk["risk_grade"]["score"]
+
+    def test_risk_endpoint_carries_inline_explanation(self):
+        # /risk folds the explanation in so the dashboard needn't re-fetch it;
+        # it must equal what the standalone endpoint returns for the same data.
+        _override(_mock_session([QQQ, TQQQ], spy=True, price_rows=_FULL_HISTORY))
+        risk = _get("/api/portfolio/risk").json()
+        _override(_mock_session([QQQ, TQQQ], spy=True, price_rows=_FULL_HISTORY))
+        explain = _get().json()
+        assert risk["risk_grade_explanation"] == explain["explanation"]
+
+    def test_risk_endpoint_explanation_null_without_grade(self):
+        # No grade -> inline explanation is null (dashboard shows nothing).
+        _override(_mock_session([QQQ, TQQQ], price_rows=[]))
+        risk = _get("/api/portfolio/risk").json()
+        assert risk["risk_grade"] is None
+        assert risk["risk_grade_explanation"] is None

@@ -489,10 +489,21 @@ async def get_portfolio_risk(
     user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """Portfolio risk analysis: concentration, leverage, beta, drawdown, grade."""
+    """Portfolio risk analysis: concentration, leverage, beta, drawdown, grade.
+
+    Carries the deterministic grade explanation inline (`risk_grade_explanation`)
+    so the dashboard renders the "Why this grade?" surface from the payload it
+    already fetched, without a second full risk pass. `explain_grade` is a pure
+    function of the `risk_grade` object, so this is ~free; the standalone
+    `/risk/explain` endpoint stays for the PR2 LLM path.
+    """
     data = await _fetch_portfolio_risk_data(session, user["id"])
+    metrics = _compute_risk_metrics(data)
     return {
-        **_compute_risk_metrics(data),
+        **metrics,
+        "risk_grade_explanation": (
+            explain_grade(metrics["risk_grade"]) if metrics["risk_grade"] else None
+        ),
         "computed_at": date.today().isoformat(),
     }
 
