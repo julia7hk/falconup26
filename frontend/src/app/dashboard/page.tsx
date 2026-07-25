@@ -12,6 +12,7 @@ import type {
   StressData,
 } from "@/types";
 import { RiskGradeCard } from "@/components/RiskGradeCard";
+import { RiskExplainCard } from "@/components/RiskExplainCard";
 import { ConcentrationPieChart } from "@/components/ConcentrationPieChart";
 import { CorrelationHeatmap } from "@/components/CorrelationHeatmap";
 import { LeverageGauge } from "@/components/LeverageGauge";
@@ -607,6 +608,10 @@ export default function DashboardPage() {
             </div>
 
             {riskData.risk_grade && <RiskGradeCard grade={riskData.risk_grade} />}
+
+            {riskData.risk_grade_explanation && (
+              <RiskExplainCard explanation={riskData.risk_grade_explanation} />
+            )}
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {riskData.concentration && <ConcentrationPieChart data={riskData.concentration} />}
