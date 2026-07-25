@@ -124,16 +124,25 @@ export default function Home() {
 
   return (
     <div className="flex flex-col flex-1 items-center bg-zinc-50 font-sans dark:bg-zinc-950">
-      <main className="flex flex-1 w-full max-w-6xl flex-col gap-10 py-8 px-4 sm:py-12 sm:px-8">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold tracking-tight dark:text-white sm:text-4xl">
-            FalconUp
-          </h1>
+      {/* Sticky top nav */}
+      <header className="sticky top-0 z-30 w-full border-b border-zinc-200/70 bg-zinc-50/80 backdrop-blur-md dark:border-zinc-800/70 dark:bg-zinc-950/80">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3 sm:px-8">
+          <a href="#top" className="flex items-center gap-2">
+            <span className="text-lg font-bold tracking-tight dark:text-white">
+              FalconUp
+            </span>
+          </a>
           {session ? (
             <div className="flex items-center gap-3">
               <a
                 href="/dashboard"
-                className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+                className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+              >
+                Dashboard
+              </a>
+              <a
+                href="/dashboard"
+                className="hidden text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 sm:inline"
               >
                 {session.user.name || session.user.email}
               </a>
@@ -148,15 +157,115 @@ export default function Home() {
               </button>
             </div>
           ) : (
-            <a
-              href="/sign-in"
-              className="rounded-lg bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
-            >
-              Sign In
-            </a>
+            <div className="flex items-center gap-2">
+              <a
+                href="/sign-in"
+                className="rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                Sign In
+              </a>
+              <a
+                href="/sign-up"
+                className="rounded-lg bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+              >
+                Get Started
+              </a>
+            </div>
           )}
         </div>
+      </header>
 
+      {/* Hero */}
+      <section
+        id="top"
+        className="relative w-full overflow-hidden border-b border-zinc-200 dark:border-zinc-800"
+      >
+        {/* decorative gradient backdrop */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-gradient-to-b from-blue-50 via-zinc-50 to-zinc-50 dark:from-blue-950/30 dark:via-zinc-950 dark:to-zinc-950"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-24 left-1/2 h-72 w-[46rem] -translate-x-1/2 rounded-full bg-blue-400/20 blur-3xl dark:bg-blue-600/20"
+        />
+        <div className="relative mx-auto flex w-full max-w-6xl flex-col items-center gap-6 px-4 py-16 text-center sm:px-8 sm:py-24">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white/60 px-3 py-1 text-xs font-medium text-zinc-600 backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-300">
+            <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+            Transparent risk intelligence — no black-box ratings
+          </span>
+          <h1 className="max-w-3xl text-4xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-6xl">
+            Understand your portfolio&apos;s risk{" "}
+            <span className="bg-gradient-to-r from-blue-600 to-indigo-500 bg-clip-text text-transparent dark:from-blue-400 dark:to-indigo-400">
+              before you buy
+            </span>
+          </h1>
+          <p className="max-w-2xl text-base leading-relaxed text-zinc-600 dark:text-zinc-300 sm:text-lg">
+            FalconUp consolidates per-symbol technical indicators and
+            portfolio-level risk analysis into plain-English signals — built for
+            new and conservative investors who want to learn <em>why</em>, not
+            just be told what to do.
+          </p>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            {session ? (
+              <a
+                href="/dashboard"
+                className="rounded-lg bg-zinc-900 px-6 py-3 text-base font-medium text-white shadow-sm transition-colors hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+              >
+                Go to your dashboard
+              </a>
+            ) : (
+              <a
+                href="/sign-up"
+                className="rounded-lg bg-zinc-900 px-6 py-3 text-base font-medium text-white shadow-sm transition-colors hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+              >
+                Get started — it&apos;s free
+              </a>
+            )}
+            <a
+              href="#explore"
+              className="rounded-lg border border-zinc-300 bg-white/60 px-6 py-3 text-base font-medium text-zinc-700 backdrop-blur transition-colors hover:bg-white dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-900"
+            >
+              Explore the data ↓
+            </a>
+          </div>
+
+          {/* feature highlights */}
+          <div className="mt-8 grid w-full max-w-4xl grid-cols-1 gap-4 sm:grid-cols-3">
+            {[
+              {
+                title: "9 technical indicators",
+                body: "RSI, MACD, Bollinger, SMA crossover, ATR, beta, Sharpe, Sortino, drawdown — combined into one Buy/Hold/Sell signal.",
+              },
+              {
+                title: "Portfolio risk grade",
+                body: "Concentration, correlation, leverage, and historical stress scenarios — scored with a transparent A–F grade.",
+              },
+              {
+                title: "Learn as you go",
+                body: "Every signal shows its work. Trace each number back to its input so you build real intuition, not blind trust.",
+              },
+            ].map((f) => (
+              <div
+                key={f.title}
+                className="rounded-xl border border-zinc-200 bg-white/70 p-5 text-left backdrop-blur transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900/50"
+              >
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+                  {f.title}
+                </h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
+                  {f.body}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <main
+        id="explore"
+        className="flex flex-1 w-full max-w-6xl flex-col gap-10 py-8 px-4 sm:py-12 sm:px-8 scroll-mt-16"
+      >
         {/* Symbol Catalog */}
         <section className="flex flex-col gap-6">
           <h2 className="text-xl font-semibold dark:text-zinc-200">
