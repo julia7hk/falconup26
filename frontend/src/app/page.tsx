@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { authClient } from "@/lib/auth-client";
-import { useRouter } from "next/navigation";
 import type {
   CatalogSymbol,
   PriceBar,
@@ -15,9 +14,9 @@ import type {
 import { PriceChart } from "@/components/PriceChart";
 import { IndicatorCard } from "@/components/IndicatorCard";
 import { CompositeCard } from "@/components/CompositeCard";
+import { Navbar } from "@/components/Navbar";
 
 export default function Home() {
-  const router = useRouter();
   const { data: session } = authClient.useSession();
   const [catalog, setCatalog] = useState<CatalogSymbol[]>([]);
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
@@ -124,56 +123,7 @@ export default function Home() {
 
   return (
     <div className="flex flex-col flex-1 items-center bg-zinc-50 font-sans dark:bg-zinc-950">
-      {/* Sticky top nav */}
-      <header className="sticky top-0 z-30 w-full border-b border-zinc-200/70 bg-zinc-50/80 backdrop-blur-md dark:border-zinc-800/70 dark:bg-zinc-950/80">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3 sm:px-8">
-          <a href="#top" className="flex items-center gap-2">
-            <span className="text-lg font-bold tracking-tight dark:text-white">
-              FalconUp
-            </span>
-          </a>
-          {session ? (
-            <div className="flex items-center gap-3">
-              <a
-                href="/dashboard"
-                className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
-              >
-                Dashboard
-              </a>
-              <a
-                href="/dashboard"
-                className="hidden text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 sm:inline"
-              >
-                {session.user.name || session.user.email}
-              </a>
-              <button
-                onClick={async () => {
-                  await authClient.signOut();
-                  router.refresh();
-                }}
-                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
-              >
-                Sign Out
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <a
-                href="/sign-in"
-                className="rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-              >
-                Sign In
-              </a>
-              <a
-                href="/sign-up"
-                className="rounded-lg bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
-              >
-                Get Started
-              </a>
-            </div>
-          )}
-        </div>
-      </header>
+      <Navbar />
 
       {/* Hero */}
       <section
