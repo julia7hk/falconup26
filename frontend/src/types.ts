@@ -128,7 +128,38 @@ export type RiskData = {
     components: Record<string, { penalty: number; max_penalty: number; reason: string }>;
     interpretation: string;
   } | null;
+  // Deterministic plain-English explanation of risk_grade, folded into the
+  // /risk payload so the dashboard needn't re-fetch. Null when there's no grade.
+  risk_grade_explanation: RiskExplanation | null;
   holdings_count: number;
+};
+
+export type RiskExplanationComponent = {
+  key: string;
+  label: string;
+  penalty: number;
+  max_penalty: number;
+  severity: "none" | "low" | "moderate" | "high" | "severe";
+  meaning: string; // educational "what this measures" (no figures)
+  detail: string; // the engine's factual reason + a severity phrase
+};
+
+export type RiskExplanation = {
+  grade: string;
+  score: number;
+  headline: string;
+  overview: string;
+  components: RiskExplanationComponent[];
+  disclaimer: string;
+};
+
+// GET /api/portfolio/risk/explain. `available` is false (with a `message`)
+// when no grade could be computed — no holdings, or <60 days of history.
+export type RiskExplainResponse = {
+  available: boolean;
+  message: string | null;
+  explanation: RiskExplanation | null;
+  computed_at: string;
 };
 
 export type CorrelationData = {
