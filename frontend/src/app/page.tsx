@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { authClient } from "@/lib/auth-client";
-import { useRouter } from "next/navigation";
 import type {
   CatalogSymbol,
   PriceBar,
@@ -15,9 +14,9 @@ import type {
 import { PriceChart } from "@/components/PriceChart";
 import { IndicatorCard } from "@/components/IndicatorCard";
 import { CompositeCard } from "@/components/CompositeCard";
+import { Navbar } from "@/components/Navbar";
 
 export default function Home() {
-  const router = useRouter();
   const { data: session } = authClient.useSession();
   const [catalog, setCatalog] = useState<CatalogSymbol[]>([]);
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
@@ -124,39 +123,98 @@ export default function Home() {
 
   return (
     <div className="flex flex-col flex-1 items-center bg-zinc-50 font-sans dark:bg-zinc-950">
-      <main className="flex flex-1 w-full max-w-6xl flex-col gap-10 py-8 px-4 sm:py-12 sm:px-8">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold tracking-tight dark:text-white sm:text-4xl">
-            FalconUp
+      <Navbar />
+
+      {/* Hero */}
+      <section
+        id="top"
+        className="relative w-full overflow-hidden border-b border-zinc-200 dark:border-zinc-800"
+      >
+        {/* decorative gradient backdrop */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-gradient-to-b from-blue-50 via-zinc-50 to-zinc-50 dark:from-blue-950/30 dark:via-zinc-950 dark:to-zinc-950"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-24 left-1/2 h-72 w-[46rem] -translate-x-1/2 rounded-full bg-blue-400/20 blur-3xl dark:bg-blue-600/20"
+        />
+        <div className="relative mx-auto flex w-full max-w-6xl flex-col items-center gap-6 px-4 py-16 text-center sm:px-8 sm:py-24">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white/60 px-3 py-1 text-xs font-medium text-zinc-600 backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-300">
+            <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+            Transparent portfolio risk analysis
+          </span>
+          <h1 className="max-w-3xl text-4xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-6xl">
+            Portfolio risk, measured and{" "}
+            <span className="bg-gradient-to-r from-blue-600 to-indigo-500 bg-clip-text text-transparent dark:from-blue-400 dark:to-indigo-400">
+              explained
+            </span>
           </h1>
-          {session ? (
-            <div className="flex items-center gap-3">
+          <p className="max-w-2xl text-base leading-relaxed text-zinc-600 dark:text-zinc-300 sm:text-lg">
+            FalconUp consolidated per-symbol technical indicators with portfolio-level
+            risk analysis — concentration, correlation, leverage, and historical
+            stress tests — and traces every signal back to the data behind it.
+          </p>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            {session ? (
               <a
                 href="/dashboard"
-                className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+                className="rounded-lg bg-zinc-900 px-6 py-3 text-base font-medium text-white shadow-sm transition-colors hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
               >
-                {session.user.name || session.user.email}
+                Go to your dashboard
               </a>
-              <button
-                onClick={async () => {
-                  await authClient.signOut();
-                  router.refresh();
-                }}
-                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            ) : (
+              <a
+                href="/sign-up"
+                className="rounded-lg bg-zinc-900 px-6 py-3 text-base font-medium text-white shadow-sm transition-colors hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
               >
-                Sign Out
-              </button>
-            </div>
-          ) : (
+                Get started
+              </a>
+            )}
             <a
-              href="/sign-in"
-              className="rounded-lg bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+              href="#explore"
+              className="rounded-lg border border-zinc-300 bg-white/60 px-6 py-3 text-base font-medium text-zinc-700 backdrop-blur transition-colors hover:bg-white dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-900"
             >
-              Sign In
+              Browse symbols
             </a>
-          )}
-        </div>
+          </div>
 
+          {/* feature highlights */}
+          <div className="mt-8 grid w-full max-w-4xl grid-cols-1 gap-4 sm:grid-cols-3">
+            {[
+              {
+                title: "Per-symbol indicators",
+                body: "RSI, MACD, Bollinger, SMA crossover, ATR, beta, Sharpe, Sortino, and drawdown, rolled up into one Buy / Hold / Sell read.",
+              },
+              {
+                title: "Portfolio risk grade",
+                body: "Concentration, correlation, leverage, and past crashes replayed on your actual holdings, scored A through F.",
+              },
+              {
+                title: "Fully transparent",
+                body: "Every grade links back to the numbers behind it, so you can verify the reasoning rather than trust a black box.",
+              },
+            ].map((f) => (
+              <div
+                key={f.title}
+                className="rounded-xl border border-zinc-200 bg-white/70 p-5 text-left backdrop-blur transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900/50"
+              >
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+                  {f.title}
+                </h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
+                  {f.body}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <main
+        id="explore"
+        className="flex flex-1 w-full max-w-6xl flex-col gap-10 py-8 px-4 sm:py-12 sm:px-8 scroll-mt-16"
+      >
         {/* Symbol Catalog */}
         <section className="flex flex-col gap-6">
           <h2 className="text-xl font-semibold dark:text-zinc-200">
