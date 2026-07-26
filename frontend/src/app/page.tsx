@@ -142,19 +142,18 @@ export default function Home() {
         <div className="relative mx-auto flex w-full max-w-6xl flex-col items-center gap-6 px-4 py-16 text-center sm:px-8 sm:py-24">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white/60 px-3 py-1 text-xs font-medium text-zinc-600 backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-300">
             <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-            Transparent risk intelligence — no black-box ratings
+            Transparent portfolio risk analysis
           </span>
           <h1 className="max-w-3xl text-4xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-6xl">
-            Understand your portfolio&apos;s risk{" "}
+            Portfolio risk, measured and{" "}
             <span className="bg-gradient-to-r from-blue-600 to-indigo-500 bg-clip-text text-transparent dark:from-blue-400 dark:to-indigo-400">
-              before you buy
+              explained
             </span>
           </h1>
           <p className="max-w-2xl text-base leading-relaxed text-zinc-600 dark:text-zinc-300 sm:text-lg">
-            FalconUp consolidates per-symbol technical indicators and
-            portfolio-level risk analysis into plain-English signals — built for
-            new and conservative investors who want to learn <em>why</em>, not
-            just be told what to do.
+            FalconUp consolidated per-symbol technical indicators with portfolio-level
+            risk analysis — concentration, correlation, leverage, and historical
+            stress tests — and traces every signal back to the data behind it.
           </p>
           <div className="flex flex-col gap-3 sm:flex-row">
             {session ? (
@@ -169,14 +168,14 @@ export default function Home() {
                 href="/sign-up"
                 className="rounded-lg bg-zinc-900 px-6 py-3 text-base font-medium text-white shadow-sm transition-colors hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
               >
-                Get started — it&apos;s free
+                Get started
               </a>
             )}
             <a
               href="#explore"
               className="rounded-lg border border-zinc-300 bg-white/60 px-6 py-3 text-base font-medium text-zinc-700 backdrop-blur transition-colors hover:bg-white dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-900"
             >
-              Explore the data ↓
+              Browse symbols
             </a>
           </div>
 
@@ -184,16 +183,16 @@ export default function Home() {
           <div className="mt-8 grid w-full max-w-4xl grid-cols-1 gap-4 sm:grid-cols-3">
             {[
               {
-                title: "9 technical indicators",
-                body: "RSI, MACD, Bollinger, SMA crossover, ATR, beta, Sharpe, Sortino, drawdown — combined into one Buy/Hold/Sell signal.",
+                title: "Per-symbol indicators",
+                body: "RSI, MACD, Bollinger, SMA crossover, ATR, beta, Sharpe, Sortino, and drawdown, rolled up into one Buy / Hold / Sell read.",
               },
               {
                 title: "Portfolio risk grade",
-                body: "Concentration, correlation, leverage, and historical stress scenarios — scored with a transparent A–F grade.",
+                body: "Concentration, correlation, leverage, and past crashes replayed on your actual holdings, scored A through F.",
               },
               {
-                title: "Learn as you go",
-                body: "Every signal shows its work. Trace each number back to its input so you build real intuition, not blind trust.",
+                title: "Fully transparent",
+                body: "Every grade links back to the numbers behind it, so you can verify the reasoning rather than trust a black box.",
               },
             ].map((f) => (
               <div

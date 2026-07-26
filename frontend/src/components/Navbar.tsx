@@ -18,13 +18,16 @@ export function Navbar() {
           <div className="flex items-center gap-3">
             <Link
               href="/dashboard"
+              className="hidden text-sm text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white sm:inline"
+            >
+              {session.user.name || session.user.email}
+            </Link>
+            <Link
+              href="/dashboard"
               className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
             >
               Dashboard
             </Link>
-            <span className="hidden text-sm text-zinc-500 dark:text-zinc-400 sm:inline">
-              {session.user.name || session.user.email}
-            </span>
             <button
               onClick={async () => {
                 await authClient.signOut();
