@@ -17,7 +17,7 @@ export function Navbar() {
         {session ? (
           <div className="flex items-center gap-3">
             <Link
-              href="/dashboard"
+              href="/account"
               className="hidden text-sm text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white sm:inline"
             >
               {session.user.name || session.user.email}
