@@ -7,6 +7,7 @@ import { authClient } from "@/lib/auth-client";
 import type {
   IndicatorData,
   Portfolio,
+  PortfolioValueHistory,
   RiskData,
   CorrelationData,
   StressData,
@@ -20,30 +21,8 @@ import { StressScenarioCard } from "@/components/StressScenarioCard";
 import { HoldingSignalPanel } from "@/components/HoldingSignalPanel";
 import { Navbar } from "@/components/Navbar";
 import { WhatIfPanel } from "@/components/WhatIfPanel";
+import { PortfolioValueChart } from "@/components/PortfolioValueChart";
 
-type Status =
-  | { kind: "idle" }
-  | { kind: "saving" }
-  | { kind: "ok"; msg: string }
-  | { kind: "err"; msg: string };
-
-function StatusLine({ status }: { status: Status }) {
-  if (status.kind === "idle" || status.kind === "saving") return null;
-  return (
-    <p
-      className={`text-xs ${
-        status.kind === "ok"
-          ? "text-green-600 dark:text-green-400"
-          : "text-red-600 dark:text-red-400"
-      }`}
-    >
-      {status.msg}
-    </p>
-  );
-}
-
-const sectionCls =
-  "space-y-3 rounded-lg border border-zinc-200 p-5 dark:border-zinc-700";
 const labelCls = "block text-sm text-zinc-500 dark:text-zinc-400";
 const inputCls =
   "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-white";
@@ -53,13 +32,6 @@ const btnCls =
 export default function DashboardPage() {
   const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
-
-  const [name, setName] = useState(session?.user.name || "");
-  const [profileStatus, setProfileStatus] = useState<Status>({ kind: "idle" });
-
-  const [currentPw, setCurrentPw] = useState("");
-  const [newPw, setNewPw] = useState("");
-  const [pwStatus, setPwStatus] = useState<Status>({ kind: "idle" });
 
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -76,6 +48,7 @@ export default function DashboardPage() {
     Record<string, IndicatorData>
   >({});
   const [expandedTicker, setExpandedTicker] = useState<string | null>(null);
+  const [valueHistory, setValueHistory] = useState<PortfolioValueHistory | null>(null);
   const [riskData, setRiskData] = useState<RiskData | null>(null);
   const [correlationData, setCorrelationData] = useState<CorrelationData | null>(null);
   const [stressData, setStressData] = useState<StressData | null>(null);
@@ -111,7 +84,22 @@ export default function DashboardPage() {
         }),
       );
       setHoldingIndicators(indicators);
-      if (data.holdings.length > 0) fetchRiskData();
+      if (data.holdings.length > 0) {
+        fetchRiskData();
+        fetchValueHistory();
+      } else {
+        setValueHistory(null);
+      }
+    } catch {}
+  }
+
+  async function fetchValueHistory() {
+    try {
+      // Fetch the full backfill window; the chart slices ranges client-side.
+      const res = await fetch("/api/portfolio/value-history?days=1825", {
+        credentials: "include",
+      });
+      if (res.ok) setValueHistory(await res.json());
     } catch {}
   }
 
@@ -213,46 +201,6 @@ export default function DashboardPage() {
       await fetchPortfolio();
     } catch (e) {
       setPortfolioError(e instanceof Error ? e.message : "Failed to delete holding");
-    }
-  }
-
-  async function saveName(e: React.FormEvent) {
-    e.preventDefault();
-    setProfileStatus({ kind: "saving" });
-    try {
-      const { error } = await authClient.updateUser({ name });
-      if (error) throw new Error(error.message ?? "Update failed");
-      setProfileStatus({ kind: "ok", msg: "Name updated." });
-      router.refresh();
-    } catch (err) {
-      setProfileStatus({
-        kind: "err",
-        msg: err instanceof Error ? err.message : "Update failed",
-      });
-    }
-  }
-
-  async function savePassword(e: React.FormEvent) {
-    e.preventDefault();
-    if (newPw.length < 8) {
-      setPwStatus({ kind: "err", msg: "Password must be at least 8 characters." });
-      return;
-    }
-    setPwStatus({ kind: "saving" });
-    try {
-      const { error } = await authClient.changePassword({
-        currentPassword: currentPw,
-        newPassword: newPw,
-      });
-      if (error) throw new Error(error.message ?? "Change failed");
-      setPwStatus({ kind: "ok", msg: "Password changed." });
-      setCurrentPw("");
-      setNewPw("");
-    } catch (err) {
-      setPwStatus({
-        kind: "err",
-        msg: err instanceof Error ? err.message : "Change failed",
-      });
     }
   }
 
@@ -388,6 +336,18 @@ export default function DashboardPage() {
               </div>
             </div>
           )}
+
+          {/* Portfolio Value Over Time */}
+          {portfolio &&
+            portfolio.holdings.length > 0 &&
+            valueHistory &&
+            valueHistory.series.length >= 2 && (
+              <PortfolioValueChart
+                series={valueHistory.series}
+                totalCost={valueHistory.total_cost}
+                complete={valueHistory.complete}
+              />
+            )}
 
           {/* Holdings List */}
           {portfolio && portfolio.holdings.length > 0 ? (
@@ -678,82 +638,6 @@ export default function DashboardPage() {
         {portfolio && portfolio.holdings.length > 0 && riskLoading && !riskData && (
           <p className="text-sm text-zinc-400">Loading risk analysis...</p>
         )}
-
-        {/* Account Settings */}
-        <section className="flex flex-col gap-4 border-t border-zinc-300 pt-6 dark:border-zinc-600">
-          <h2 className="text-xl font-bold dark:text-zinc-200">Account</h2>
-
-          <div className={sectionCls}>
-            <div className="text-sm text-zinc-500 dark:text-zinc-400">
-              Email:{" "}
-              <span className="text-zinc-900 dark:text-white">
-                {session.user.email}
-              </span>
-            </div>
-          </div>
-
-          <form className={sectionCls} onSubmit={saveName}>
-            <h3 className="text-base font-semibold dark:text-zinc-200">Name</h3>
-            <div>
-              <label className={labelCls}>Display name</label>
-              <input
-                className={inputCls}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                type="submit"
-                disabled={profileStatus.kind === "saving"}
-                className={btnCls}
-              >
-                {profileStatus.kind === "saving" ? "Saving..." : "Save"}
-              </button>
-              <StatusLine status={profileStatus} />
-            </div>
-          </form>
-
-          <form className={sectionCls} onSubmit={savePassword}>
-            <h3 className="text-base font-semibold dark:text-zinc-200">
-              Change Password
-            </h3>
-            <div>
-              <label className={labelCls}>Current password</label>
-              <input
-                className={inputCls}
-                type="password"
-                value={currentPw}
-                onChange={(e) => setCurrentPw(e.target.value)}
-                required
-                autoComplete="current-password"
-              />
-            </div>
-            <div>
-              <label className={labelCls}>New password (8+ characters)</label>
-              <input
-                className={inputCls}
-                type="password"
-                value={newPw}
-                onChange={(e) => setNewPw(e.target.value)}
-                required
-                autoComplete="new-password"
-                minLength={8}
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                type="submit"
-                disabled={pwStatus.kind === "saving"}
-                className={btnCls}
-              >
-                {pwStatus.kind === "saving" ? "Changing..." : "Change Password"}
-              </button>
-              <StatusLine status={pwStatus} />
-            </div>
-          </form>
-        </section>
       </main>
     </div>
   );

@@ -99,6 +99,21 @@ export type Portfolio = {
   prices_complete: boolean;
 };
 
+// GET /api/portfolio/value-history — dollar value of the current holdings on
+// each past trading day. `complete` is false when a holding lacked price
+// history and was excluded from the sum. `total_cost` is the flat cost basis.
+export type PortfolioValuePoint = {
+  date: string;
+  value: number;
+};
+
+export type PortfolioValueHistory = {
+  series: PortfolioValuePoint[];
+  total_cost: number;
+  holdings_count: number;
+  complete: boolean;
+};
+
 export type RiskData = {
   concentration: {
     herfindahl_index: number;
