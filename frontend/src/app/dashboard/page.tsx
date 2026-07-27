@@ -7,6 +7,7 @@ import { authClient } from "@/lib/auth-client";
 import type {
   IndicatorData,
   Portfolio,
+  PortfolioValueHistory,
   RiskData,
   CorrelationData,
   StressData,
@@ -20,6 +21,7 @@ import { StressScenarioCard } from "@/components/StressScenarioCard";
 import { HoldingSignalPanel } from "@/components/HoldingSignalPanel";
 import { Navbar } from "@/components/Navbar";
 import { WhatIfPanel } from "@/components/WhatIfPanel";
+import { PortfolioValueChart } from "@/components/PortfolioValueChart";
 
 type Status =
   | { kind: "idle" }
@@ -76,6 +78,7 @@ export default function DashboardPage() {
     Record<string, IndicatorData>
   >({});
   const [expandedTicker, setExpandedTicker] = useState<string | null>(null);
+  const [valueHistory, setValueHistory] = useState<PortfolioValueHistory | null>(null);
   const [riskData, setRiskData] = useState<RiskData | null>(null);
   const [correlationData, setCorrelationData] = useState<CorrelationData | null>(null);
   const [stressData, setStressData] = useState<StressData | null>(null);
@@ -111,7 +114,22 @@ export default function DashboardPage() {
         }),
       );
       setHoldingIndicators(indicators);
-      if (data.holdings.length > 0) fetchRiskData();
+      if (data.holdings.length > 0) {
+        fetchRiskData();
+        fetchValueHistory();
+      } else {
+        setValueHistory(null);
+      }
+    } catch {}
+  }
+
+  async function fetchValueHistory() {
+    try {
+      // Fetch the full backfill window; the chart slices ranges client-side.
+      const res = await fetch("/api/portfolio/value-history?days=1825", {
+        credentials: "include",
+      });
+      if (res.ok) setValueHistory(await res.json());
     } catch {}
   }
 
@@ -388,6 +406,18 @@ export default function DashboardPage() {
               </div>
             </div>
           )}
+
+          {/* Portfolio Value Over Time */}
+          {portfolio &&
+            portfolio.holdings.length > 0 &&
+            valueHistory &&
+            valueHistory.series.length >= 2 && (
+              <PortfolioValueChart
+                series={valueHistory.series}
+                totalCost={valueHistory.total_cost}
+                complete={valueHistory.complete}
+              />
+            )}
 
           {/* Holdings List */}
           {portfolio && portfolio.holdings.length > 0 ? (

@@ -549,6 +549,72 @@ async def explain_portfolio_risk(
     }
 
 
+@router.get("/value-history")
+async def get_portfolio_value_history(
+    days: int = 365,
+    user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Dollar value of the current holdings over time (for the value chart).
+
+    Reconstructs what today's basket would have been worth on each past trading
+    day: for every date, `sum(shares * close)` across holdings. Uses the daily
+    closes already in `price_history` (via `_fetch_market_data`) — no new data.
+
+    Caveat: there's no transaction/lot history, so this replays the *current*
+    share counts backward. It shows how the current portfolio's market value
+    tracked, not a true account balance that accounts for when each lot was
+    bought. `total_cost` is the flat cost basis (sum of `shares * avg_cost`) so
+    the frontend can draw a break-even line and read P&L as value − cost.
+
+    `days` caps how far back to go (default 365, max 1825 ≈ 5y of backfill).
+    Dates are the intersection where *every* priced holding has a close, so the
+    total is always a like-for-like sum. `complete` is false when a holding has
+    no price history and was left out of the sum.
+    """
+    days = max(1, min(days, 365 * 5))
+    materials = await _fetch_market_data(session, user["id"])
+    held = materials["held"]
+    prices_by_ticker = materials["prices_by_ticker"]
+
+    if not held:
+        return {
+            "series": [],
+            "total_cost": 0.0,
+            "holdings_count": 0,
+            "complete": True,
+        }
+
+    total_cost = sum(h["shares"] * h["avg_cost"] for h in held)
+
+    # Holdings that actually have price history (SPY is present for risk math
+    # but isn't a holding, so it's naturally excluded — we only iterate `held`).
+    priced = [h for h in held if h["ticker"] in prices_by_ticker]
+    complete = len(priced) == len(held)
+
+    # Intersection of dates where every priced holding has a close, so each
+    # summed point covers the same trading day for the whole basket.
+    common_dates: set[str] | None = None
+    for h in priced:
+        ticker_dates = set(prices_by_ticker[h["ticker"]].keys())
+        common_dates = ticker_dates if common_dates is None else common_dates & ticker_dates
+
+    cutoff = (date.today() - timedelta(days=days)).isoformat()
+    sorted_dates = sorted(d for d in (common_dates or set()) if d >= cutoff)
+
+    series = []
+    for d in sorted_dates:
+        value = sum(h["shares"] * prices_by_ticker[h["ticker"]][d] for h in priced)
+        series.append({"date": d, "value": round(value, 2)})
+
+    return {
+        "series": series,
+        "total_cost": round(total_cost, 2),
+        "holdings_count": len(held),
+        "complete": complete,
+    }
+
+
 @router.get("/correlation")
 async def get_portfolio_correlation(
     user: dict = Depends(get_current_user),
