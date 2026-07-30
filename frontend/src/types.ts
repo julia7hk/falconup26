@@ -166,6 +166,10 @@ export type RiskExplanation = {
   overview: string;
   components: RiskExplanationComponent[];
   disclaimer: string;
+  // Which explainer path produced the prose (M8 PR2). Present on the standalone
+  // /risk/explain payload; absent on the inline /risk copy, which is always
+  // deterministic. Optional so both shapes satisfy the type.
+  source?: "llm" | "deterministic";
 };
 
 // GET /api/portfolio/risk/explain. `available` is false (with a `message`)

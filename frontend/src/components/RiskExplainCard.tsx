@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { RiskExplanation } from "@/types";
+import type { RiskExplainResponse, RiskExplanation } from "@/types";
 
 // Severity → chip styling. Ordered to read at a glance: green (fine) through
 // red (biggest risks). Mirrors the harsh, conservative grade thresholds.
@@ -16,17 +16,43 @@ const SEVERITY_STYLES: Record<string, string> = {
 /**
  * Plain-English "why this grade" surface for the portfolio risk card.
  *
- * Presentation only — all text comes from GET /api/portfolio/risk/explain
- * (backend owns the explanation content). Renders collapsed by default so it
- * doesn't crowd the grade; the disclaimer is always shown once expanded.
+ * Presentation only — the backend owns all explanation content. The `explanation`
+ * prop is the deterministic copy folded into GET /api/portfolio/risk, so the
+ * card renders instantly. On first expand it lazily fetches
+ * GET /api/portfolio/risk/explain, which may return an LLM-enriched rephrasing
+ * (M8 PR2); if that succeeds it swaps in, otherwise the deterministic prop stands.
+ * The upgrade is silent — the same grade and figures either way. Collapsed by
+ * default so it doesn't crowd the grade; the disclaimer shows once expanded.
  */
 export function RiskExplainCard({ explanation }: { explanation: RiskExplanation }) {
   const [expanded, setExpanded] = useState(false);
+  const [enriched, setEnriched] = useState<RiskExplanation | null>(null);
+  const [fetched, setFetched] = useState(false);
+
+  // Fetch the (possibly LLM-enriched) explanation once, on first expand.
+  async function handleToggle() {
+    const next = !expanded;
+    setExpanded(next);
+    if (!next || fetched) return;
+    setFetched(true); // mark before awaiting so we never double-fetch
+    try {
+      const res = await fetch("/api/portfolio/risk/explain", {
+        credentials: "include",
+      });
+      if (!res.ok) return;
+      const data: RiskExplainResponse = await res.json();
+      if (data.available && data.explanation) setEnriched(data.explanation);
+    } catch {
+      // Network error — keep the deterministic prop; nothing to surface.
+    }
+  }
+
+  const shown = enriched ?? explanation;
 
   return (
     <div className="rounded-lg border border-zinc-200 dark:border-zinc-700">
       <button
-        onClick={() => setExpanded(!expanded)}
+        onClick={handleToggle}
         className="flex w-full items-center justify-between gap-3 p-4 text-left"
       >
         <div>
@@ -34,7 +60,7 @@ export function RiskExplainCard({ explanation }: { explanation: RiskExplanation 
             Why this grade?
           </p>
           <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-            {explanation.headline}
+            {shown.headline}
           </p>
         </div>
         <span className="shrink-0 text-xs text-zinc-400">{expanded ? "▲" : "▼"}</span>
@@ -42,10 +68,10 @@ export function RiskExplainCard({ explanation }: { explanation: RiskExplanation 
 
       {expanded && (
         <div className="border-t border-zinc-200 px-4 pb-4 pt-3 dark:border-zinc-700">
-          <p className="text-sm text-zinc-600 dark:text-zinc-300">{explanation.overview}</p>
+          <p className="text-sm text-zinc-600 dark:text-zinc-300">{shown.overview}</p>
 
           <div className="mt-4 flex flex-col gap-4">
-            {explanation.components.map((c) => (
+            {shown.components.map((c) => (
               <div key={c.key}>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
@@ -69,7 +95,7 @@ export function RiskExplainCard({ explanation }: { explanation: RiskExplanation 
           </div>
 
           <p className="mt-4 border-t border-zinc-100 pt-3 text-[11px] italic text-zinc-400 dark:border-zinc-800">
-            {explanation.disclaimer}
+            {shown.disclaimer}
           </p>
         </div>
       )}
