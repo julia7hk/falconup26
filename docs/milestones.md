@@ -206,14 +206,14 @@ LLM never computes — it rephrases the structured risk data. No chat box, no fr
 
 Scope note: deliberately lean. The model here is a rephraser guarded by a validator + deterministic fallback, so raw model tier barely matters — a cheap free tier is fine (Groq's free tier, no card). Caching and prompt versioning are **deferred** (single user, rare portfolio changes, sub-cent per-call cost — the surface area isn't earned yet). `context.py` is kept: it's the seam for experimenting with different prompts and context assembly.
 
-- [ ] `.env` / `.env.example` + Docker build/runtime: `GROQ_API_KEY`.
-- [ ] `backend/llm_explainer/client.py` — thin LLM wrapper (OpenAI SDK → Groq base URL, model e.g. `llama-3.3-70b-versatile`, JSON/structured output, timeout/retry handling).
-- [ ] `backend/llm_explainer/context.py` — assemble structured risk data into prompt context (no user free-text). The experimentation seam — swap prompts / vary what context the model sees here.
-- [ ] `backend/llm_explainer/prompt.py` — single prompt template for the risk-grade explanation (plain constant; promote to versioned `prompts/v*/` dirs only when actually A/B testing or supporting cached outputs).
-- [ ] `backend/llm_explainer/validator.py` — reject hallucinated tickers/numbers (must appear in input) → fall back to PR1 text.
-- [ ] Wire enrichment into `/api/portfolio/risk/explain`: LLM when available + valid, else PR1 deterministic text (seamless).
-- [ ] Tests: validator rejects bad output; fallback serves deterministic text on refusal/no-key/timeout.
-- [ ] Verify end-to-end with and without the API key set, then ship.
+- [x] `.env` / `.env.example` + Docker build/runtime: `GROQ_API_KEY`. (Runtime-only for the backend container via `env_file`, so no Docker build arg / rebuild needed.)
+- [x] `backend/llm_explainer/client.py` — thin LLM wrapper (OpenAI SDK → Groq base URL, model `llama-3.3-70b-versatile`, JSON/structured output, timeout/retry handling; returns `None` on any failure incl. no key).
+- [x] `backend/llm_explainer/context.py` — assemble structured risk data into prompt context (no user free-text). The experimentation seam — swap prompts / vary what context the model sees here.
+- [x] `backend/llm_explainer/prompt.py` — single prompt template for the risk-grade explanation (plain constant; promote to versioned `prompts/v*/` dirs only when actually A/B testing or supporting cached outputs).
+- [x] `backend/llm_explainer/validator.py` — reject hallucinated tickers/numbers (must appear in input) → fall back to PR1 text.
+- [x] Wire enrichment into `/api/portfolio/risk/explain`: LLM when available + valid, else PR1 deterministic text (seamless). Orchestrated by `llm_explainer.explain()`, run off the event loop; `explanation.source` reports the path. Frontend `RiskExplainCard` fetches it lazily on expand.
+- [x] Tests: validator rejects bad output; fallback serves deterministic text on refusal/no-key/timeout.
+- [x] Verify end-to-end with and without the API key set, then ship.
 
 **Deferred to M9 (persistence):** `llm_analysis_cache` table + `cache.py` (keyed on `(prompt_version, data_hash)`, invalidate on data change). Add when multi-user traffic makes repeat API calls worth avoiding.
 
