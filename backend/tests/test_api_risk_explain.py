@@ -118,13 +118,17 @@ class TestRiskExplain:
         assert explain["explanation"]["score"] == risk["risk_grade"]["score"]
 
     def test_risk_endpoint_carries_inline_explanation(self):
-        # /risk folds the explanation in so the dashboard needn't re-fetch it;
-        # it must equal what the standalone endpoint returns for the same data.
+        # /risk folds the deterministic explanation in so the dashboard renders
+        # instantly. The standalone endpoint is the PR2 LLM path and adds a
+        # `source` marker (deterministic here — no API key in tests). With the
+        # LLM off, the two must otherwise match exactly, guarding the wiring.
         _override(_mock_session([QQQ, TQQQ], spy=True, price_rows=_FULL_HISTORY))
         risk = _get("/api/portfolio/risk").json()
         _override(_mock_session([QQQ, TQQQ], spy=True, price_rows=_FULL_HISTORY))
         explain = _get().json()
-        assert risk["risk_grade_explanation"] == explain["explanation"]
+        ex = explain["explanation"]
+        assert ex["source"] == "deterministic"
+        assert {k: v for k, v in ex.items() if k != "source"} == risk["risk_grade_explanation"]
 
     def test_risk_endpoint_explanation_null_without_grade(self):
         # No grade -> inline explanation is null (dashboard shows nothing).
