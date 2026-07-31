@@ -8,3 +8,5 @@
 - fastapi app backend
 - nextjs app frontend
 - postgres on host server
+
+Portfolio risk grades come with a plain-English "why" explainer. Set `ANTHROPIC_API_KEY` in `.env` to have an LLM reword it; without a key it serves deterministic text.
