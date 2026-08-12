@@ -204,8 +204,8 @@ PR1 (deterministic, no API) then PR2 (LLM enrichment on top).
 
 LLM never computes — it rephrases the structured risk data. No chat box, no free-text input.
 
-- [ ] `.env` / `.env.example` + Docker build/runtime: `ANTHROPIC_API_KEY`.
-- [ ] `backend/llm_explainer/client.py` — thin `anthropic` wrapper (model `claude-opus-4-8`, adaptive thinking, `messages.parse()` schema, refusal/timeout/retry handling).
+- [ ] `.env` / `.env.example` + Docker build/runtime: `GROQ_API_KEY`.
+- [ ] `backend/llm_explainer/client.py` — thin LLM wrapper (OpenAI SDK → Groq base URL, model e.g. `llama-3.3-70b-versatile`, JSON/structured output, timeout/retry handling).
 - [ ] `backend/llm_explainer/context.py` — assemble structured risk data into prompt context (no user free-text).
 - [ ] `backend/llm_explainer/prompts/v1/` — versioned prompt template for the risk-grade explanation.
 - [ ] `backend/llm_explainer/validator.py` — reject hallucinated tickers/numbers (must appear in input) → fall back to PR1 text.

@@ -25,7 +25,7 @@ The indicator and risk engines are pure functions with no DB or network access, 
 - `backend/indicators/` — indicator math + composite scoring
 - `backend/risk/` — portfolio risk engine
 - `backend/market/` — market data behind a provider interface (yfinance + FRED), Redis-cached
-- `backend/llm_explainer/` — templates → LLM reword → validator → fallback, Anthropic call isolated to one file
+- `backend/llm_explainer/` — templates → LLM reword → validator → fallback, LLM call isolated to one file
 - `backend/routers/` — FastAPI routes
 - `frontend/` — Next.js UI
 
@@ -33,7 +33,7 @@ Alembic migrations are the source of truth for the schema; ORM models are downst
 
 ## Stack
 
-FastAPI · Python 3.13 · Next.js 16 · React 19 · TypeScript · Tailwind 4 · PostgreSQL · Redis · Better Auth · Anthropic API · Docker · Nginx · Oracle Cloud · GitHub Actions
+FastAPI · Python 3.13 · Next.js 16 · React 19 · TypeScript · Tailwind 4 · PostgreSQL · Redis · Better Auth · Groq (free LLM) · Docker · Nginx · Oracle Cloud · GitHub Actions
 
 ## Run it
 
@@ -49,4 +49,4 @@ npx prisma generate
 npm run dev            # localhost:4040
 ```
 
-Or `docker compose -f compose.build.yaml up --build` from `ops/`. Copy `.env.example` to `.env` first. Without `ANTHROPIC_API_KEY` the explainer just serves the deterministic text.
+Or `docker compose -f compose.build.yaml up --build` from `ops/`. Copy `.env.example` to `.env` first. Without `GROQ_API_KEY` the explainer just serves the deterministic text.

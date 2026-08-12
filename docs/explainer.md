@@ -44,9 +44,9 @@ Ships value on its own and is the fallback PR2 depends on.
 
 ### PR2 — Structured LLM enrichment (on top of PR1)
 
-- `backend/llm_explainer/client.py` — thin `anthropic` SDK wrapper. Model `claude-opus-4-8`,
-  adaptive thinking, `messages.parse()` against a schema (SDK-layer output validation).
-  Handles `stop_reason == "refusal"`, timeouts, retries.
+- `backend/llm_explainer/client.py` — thin LLM client wrapper (OpenAI SDK pointed at Groq's
+  base URL). Model e.g. `llama-3.3-70b-versatile`, JSON/structured output against a schema.
+  Handles provider errors, timeouts, retries.
 - `backend/llm_explainer/context.py` — assembles the *structured* risk data (grade, penalties,
   weights, contributions) into the prompt. The user never types into this.
 - `backend/llm_explainer/prompts/` — versioned prompt templates (`v1/…`), one per analysis type.
@@ -66,5 +66,5 @@ Ships value on its own and is the fallback PR2 depends on.
 
 ## Config
 
-- `ANTHROPIC_API_KEY` → `.env` / `.env.example` and Docker build/runtime (needed only at
+- `GROQ_API_KEY` → `.env` / `.env.example` and Docker build/runtime (needed only at
   PR2; PR1 needs nothing). Key deployed to oc40 when PR2 ships.
