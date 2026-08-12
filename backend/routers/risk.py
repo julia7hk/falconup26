@@ -516,7 +516,7 @@ async def explain_portfolio_risk(
 ):
     """Plain-English explanation of the portfolio risk grade.
 
-    LLM-enriched when `ANTHROPIC_API_KEY` is set and the rephrasing passes the
+    LLM-enriched when `GROQ_API_KEY` is set and the rephrasing passes the
     traceability validator; otherwise the deterministic PR1 text (M8 PR2). The
     response `explanation.source` reports which path served it. Either way the
     text is built from the same `_compute_risk_metrics` payload `/risk` returns,

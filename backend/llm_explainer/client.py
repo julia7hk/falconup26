@@ -1,11 +1,12 @@
-"""Thin Anthropic wrapper for the risk-grade explainer (M8 PR2).
+"""Thin Groq wrapper for the risk-grade explainer (M8 PR2).
 
-The single I/O boundary of the LLM layer — the only module here that touches
-the network or the `anthropic` SDK. Everything flaky and external is quarantined
-in one function: no API key, import failure, refusal, timeout, or malformed
+The single I/O boundary of the LLM layer — the only module here that touches the
+network or an LLM SDK. Groq exposes an OpenAI-compatible API, so we drive it with
+the `openai` SDK pointed at Groq's base URL. Everything flaky and external is
+quarantined in one function: no API key, import failure, timeout, or malformed
 output all collapse to the same signal — ``None`` — which tells the caller to
-serve the deterministic PR1 text. The layer degrades to "no LLM" silently and
-by design; a missing key is a supported configuration, not an error.
+serve the deterministic PR1 text. The layer degrades to "no LLM" silently and by
+design; a missing key is a supported configuration, not an error.
 
 Deliberately *not* responsible for validation (``validator.py``) or for merging
 the rephrased fields back over the baseline (``__init__.explain``). This returns
@@ -17,17 +18,19 @@ from __future__ import annotations
 import logging
 import os
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from .context import build_user_content
 from .prompt import SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
-# Cheap tier by design: the model is a rephraser guarded by the validator + a
-# deterministic fallback, so raw intelligence barely matters here. Start cheap;
-# only reach for a larger model if rephrasing quality actually disappoints.
-_MODEL = "claude-haiku-4-5"
+# Groq's OpenAI-compatible endpoint.
+_BASE_URL = "https://api.groq.com/openai/v1"
+# Cheap, fast, free-tier model by design: the model is a rephraser guarded by the
+# validator + a deterministic fallback, so raw intelligence barely matters here.
+# Only reach for a larger model if rephrasing quality actually disappoints.
+_MODEL = "llama-3.3-70b-versatile"
 _MAX_TOKENS = 2048
 # Keep the request snappy — this sits in the /risk/explain request path, and a
 # slow model call should fall back to the instant deterministic text, not hang.
@@ -53,42 +56,51 @@ def generate(explanation: dict) -> dict | None:
 
     ``explanation`` is the PR1 ``templates.explain_grade`` output. Returns the
     parsed LLM fields as a dict (``{headline, overview, components:[{key,
-    detail}]}``) on success, or ``None`` on any failure — no key configured,
-    SDK unavailable, refusal, timeout, network error, or output that didn't
+    detail}]}``) on success, or ``None`` on any failure — no key configured, SDK
+    unavailable, timeout, network error, empty completion, or output that didn't
     parse to the schema. The caller treats ``None`` as "fall back to PR1".
     """
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    api_key = os.environ.get("GROQ_API_KEY", "").strip()
     if not api_key:
         # Expected, supported configuration — LLM enrichment is simply off.
         return None
 
     try:
-        import anthropic  # lazy: a missing SDK must not break app import
+        from openai import OpenAI  # lazy: a missing SDK must not break app import
     except ImportError:
-        logger.warning("anthropic SDK not installed; serving deterministic explanation")
+        logger.warning("openai SDK not installed; serving deterministic explanation")
         return None
 
     try:
-        client = anthropic.Anthropic(api_key=api_key).with_options(
-            timeout=_TIMEOUT_SECONDS, max_retries=_MAX_RETRIES
+        client = OpenAI(
+            api_key=api_key,
+            base_url=_BASE_URL,
+            timeout=_TIMEOUT_SECONDS,
+            max_retries=_MAX_RETRIES,
         )
-        response = client.messages.parse(
+        response = client.chat.completions.create(
             model=_MODEL,
             max_tokens=_MAX_TOKENS,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": build_user_content(explanation)}],
-            output_format=LLMExplanation,
+            # Groq's JSON mode: the model must return a single JSON object. The
+            # prompt describes the exact shape; pydantic re-checks it below.
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": build_user_content(explanation)},
+            ],
         )
     except Exception as exc:  # timeout, rate limit, network, API error, etc.
         logger.warning("LLM explanation failed (%s); serving deterministic text", exc)
         return None
 
-    if response.stop_reason == "refusal":
-        logger.warning("LLM refused the explanation request; serving deterministic text")
+    content = response.choices[0].message.content if response.choices else None
+    if not content:  # empty completion or hit the token ceiling before any text
+        logger.warning("LLM returned no content; serving deterministic text")
         return None
 
-    parsed = response.parsed_output
-    if parsed is None:  # hit max_tokens or otherwise didn't parse to schema
+    try:
+        parsed = LLMExplanation.model_validate_json(content)
+    except ValidationError:
         logger.warning("LLM output did not parse to schema; serving deterministic text")
         return None
 

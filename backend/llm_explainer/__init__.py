@@ -8,8 +8,8 @@ prose — it never computes. The pieces:
 - ``context.py`` assembles the baseline explanation into the model's input
   (the experimentation seam),
 - ``prompt.py`` holds the single versioned prompt,
-- ``client.py`` is the one I/O boundary (Anthropic call; returns ``None`` on any
-  failure — no key, refusal, timeout, bad output),
+- ``client.py`` is the one I/O boundary (Groq call; returns ``None`` on any
+  failure — no key, timeout, bad output),
 - ``validator.py`` rejects any rephrasing that introduces a number or ticker the
   engine didn't produce.
 

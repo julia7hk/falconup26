@@ -11,8 +11,10 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
 from fastapi.testclient import TestClient
 
+import llm_explainer
 from auth import get_current_user
 from db import get_session
 from main import app
@@ -48,6 +50,14 @@ def _get(path="/api/portfolio/risk/explain"):
 _FULL_HISTORY = (
     _price_series("QQQ", 90) + _price_series("TQQQ", 90) + _price_series("SPY", 90)
 )
+
+
+@pytest.fixture(autouse=True)
+def _llm_off(monkeypatch):
+    # Keep this endpoint suite hermetic: force the LLM enrichment path off so no
+    # test makes a real Groq call (a GROQ_API_KEY may be present in the dev
+    # environment). The LLM-path behavior is covered in test_explainer_enrich.py.
+    monkeypatch.setattr(llm_explainer.client, "generate", lambda _ex: None)
 
 
 class TestRiskExplain:

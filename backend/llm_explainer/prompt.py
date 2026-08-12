@@ -1,7 +1,7 @@
 """The risk-grade explanation prompt (M8 PR2).
 
-A single, versioned prompt constant. Kept in one place — separate from the
-`anthropic` I/O in ``client.py`` and the fact-assembly in ``context.py`` — so
+A single, versioned prompt constant. Kept in one place — separate from the LLM
+I/O in ``client.py`` and the fact-assembly in ``context.py`` — so
 prompt iteration is a one-file change. Promote to versioned ``prompts/v*/``
 directories only when there's a real reason to keep old versions around
 (A/B testing, or a cache keyed on prompt version); at single-user scale a plain
@@ -49,6 +49,8 @@ the original text instead, so follow them exactly:
 5. Keep it short and readable — a sentence or two per field. Calm, direct, \
    jargon-light. No emoji, no preamble like "Here is...".
 
-Return the rephrased text in the required structure. Rephrase the headline, the \
-overview, and each component's detail. Keep each component keyed by its given \
-`key` so it maps back to the original."""
+Return only a single JSON object with exactly these keys: `headline` (a string), \
+`overview` (a string), and `components` (an array of objects, each with a `key` \
+string and a `detail` string). Rephrase the headline, the overview, and each \
+component's detail. Keep each component's `key` exactly as given so it maps back \
+to the original. Output nothing but the JSON object — no markdown, no preamble."""
