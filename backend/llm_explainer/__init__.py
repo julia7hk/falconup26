@@ -2,8 +2,10 @@
 
 ``templates.py`` (M8 PR1) is the deterministic, pure-Python baseline: it turns a
 ``risk_grade`` payload into plain-English explanations with no I/O. PR2 adds an
-LLM that *rephrases* that same structured text into warmer, beginner-friendly
-prose — it never computes. The pieces:
+LLM that *explains* that same structured text — teaching a beginner what each
+risk factor measures, why it matters, and what a healthier picture looks like —
+grounded in the engine's grade. It never computes new figures: the validator
+rejects any number or ticker the facts didn't already contain. The pieces:
 
 - ``context.py`` assembles the baseline explanation into the model's input
   (the experimentation seam),

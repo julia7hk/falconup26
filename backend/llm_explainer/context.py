@@ -46,9 +46,12 @@ def build_user_content(explanation: dict) -> str:
         ],
     }
     return (
-        "Here are the risk facts to rephrase. Rephrase `headline`, `overview`, "
-        "and each component's `detail` into warmer, beginner-friendly prose, "
-        "following every rule above. Preserve every number and ticker exactly as "
-        "written; do not introduce new ones.\n\n"
+        "Here are the risk facts to explain. Write `headline`, `overview`, and "
+        "each component's `detail` so a nervous beginner genuinely understands "
+        "and learns from them — what each factor measures, why it matters, and "
+        "what a healthier picture looks like — following every rule above. Lean "
+        "on each component's `meaning` line as background you can build on. "
+        "Preserve every number and ticker exactly as written and introduce no "
+        "new ones.\n\n"
         f"{json.dumps(facts, indent=2)}"
     )
