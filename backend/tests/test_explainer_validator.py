@@ -76,6 +76,23 @@ class TestValidator:
         ex = _enriched(grade, overview="Your portfolio dropped 42% last quarter.")
         assert is_valid(ex, grade) is False
 
+    def test_bare_small_integers_in_prose_pass(self, grade):
+        # Single digits 0-3 are educational/prose ("a beta above 1", "2x or 3x
+        # ETFs", "a few holdings"), never this portfolio's figures. Rejecting
+        # them made the guard fall back to deterministic text ~half the time.
+        ex = _enriched(
+            grade,
+            overview="A beta above 1 means bigger swings than the market.",
+            details={"leverage": "Leveraged funds like 2x or 3x ETFs magnify moves."},
+        )
+        assert is_valid(ex, grade) is True
+
+    def test_fabricated_single_digit_figure_still_fails(self, grade):
+        # The exemption is only for bare integers 0-3; a fabricated percentage
+        # using a larger single-ish figure must still be caught.
+        ex = _enriched(grade, overview="Your portfolio dropped 7% last week.")
+        assert is_valid(ex, grade) is False
+
     def test_hallucinated_ticker_fails(self, grade):
         ex = _enriched(grade, overview="You should really look at AAPL and NVDA.")
         assert is_valid(ex, grade) is False

@@ -25,9 +25,16 @@ import re
 # ticker, so they never count against the ticker-traceability check.
 _ALLOWED_ACRONYMS = frozenset({"HHI", "ETF", "ETFS", "US", "USA", "AI"})
 
-# The one number allowed without tracing to the input: the fixed "/100" scale
-# the headline states ("scored X out of 100"). Everything else must trace.
-_ALLOWED_NUMBERS = frozenset({"100"})
+# Numbers a rephrase may use without tracing to the input:
+#   "100" — the fixed "/100" grade scale the headline states ("scored X out of 100").
+#   "0"-"3" — bare single digits that recur in natural and educational prose, not
+#     as this portfolio's figures: "a beta above 1", "leveraged funds like 2x or 3x
+#     ETFs", "a few holdings". This mirrors why the static `meaning` copy is exempt
+#     (see module docstring) — a real portfolio figure in this domain is always a
+#     decimal, a percentage, a multi-digit count, or a date, all of which still
+#     must trace. A fabricated figure like "dropped 42%" or "beta of 1.9" is
+#     unaffected: 42 is multi-digit and 1.9 carries a decimal.
+_ALLOWED_NUMBERS = frozenset({"100", "0", "1", "2", "3"})
 
 _NUMBER_RE = re.compile(r"\d+(?:\.\d+)?")
 _TICKER_RE = re.compile(r"\b[A-Z]{2,5}\b")
