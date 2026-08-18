@@ -17,6 +17,7 @@ from typing import Literal
 from auth import get_current_user
 from db import get_session
 from indicators.math import beta as compute_beta
+from llm_explainer import explain as explain_grade_enriched
 from llm_explainer.templates import explain_grade
 from market import get_price_fetcher
 from risk.math import (
@@ -515,11 +516,18 @@ async def explain_portfolio_risk(
 ):
     """Plain-English explanation of the portfolio risk grade.
 
-    Deterministic, no external API — the always-on baseline explainer (M8 PR1).
-    Reuses the same `_compute_risk_metrics` payload `/risk` returns, so the text
-    can never describe a different grade than the card shows. When the grade
-    can't be computed (no holdings, or under 60 days of aligned history) the
-    payload reports `available: false` with a message instead of prose.
+    LLM-enriched when `GROQ_API_KEY` is set and the rephrasing passes the
+    traceability validator; otherwise the deterministic PR1 text (M8 PR2). The
+    response `explanation.source` reports which path served it. Either way the
+    text is built from the same `_compute_risk_metrics` payload `/risk` returns,
+    so it can never describe a different grade than the card shows. When the
+    grade can't be computed (no holdings, or under 60 days of aligned history)
+    the payload reports `available: false` with a message instead of prose.
+
+    The LLM call is blocking, so it runs in a worker thread to keep the event
+    loop free. `/risk` still carries the deterministic explanation inline, so the
+    dashboard renders instantly; this endpoint is the (lazily-fetched) enriched
+    surface.
     """
     data = await _fetch_portfolio_risk_data(session, user["id"])
     metrics = _compute_risk_metrics(data)
@@ -541,10 +549,11 @@ async def explain_portfolio_risk(
             "computed_at": date.today().isoformat(),
         }
 
+    explanation = await asyncio.to_thread(explain_grade_enriched, grade)
     return {
         "available": True,
         "message": None,
-        "explanation": explain_grade(grade),
+        "explanation": explanation,
         "computed_at": date.today().isoformat(),
     }
 
