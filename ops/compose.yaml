@@ -18,20 +18,10 @@ services:
     networks:
       - falconup
 
-  nginx:
-    container_name: falconup-nginx
-    image: nginx:latest
-    restart: always
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./nginx/log:/var/log/nginx
-    depends_on:
-      - frontend
-      - backend
-    networks:
-      - falconup
+  # nginx removed — the shared edge-proxy stack (~/_proj/edge-proxy) now owns
+  # :80 and reverse-proxies falconup.julia7hk.com to falconup-backend /
+  # falconup-frontend over the external `edge` network. falconup is now an
+  # nginx-less backend stack that just joins `edge`. See edge-proxy/compose.yaml.
 
   backend:
     container_name: falconup-backend
@@ -53,6 +43,7 @@ services:
         condition: service_completed_successfully
     networks:
       - falconup
+      - edge
 
   frontend:
     container_name: falconup-frontend
@@ -65,7 +56,16 @@ services:
         condition: service_completed_successfully
     networks:
       - falconup
+      - edge
 
 networks:
+  # Intra-app network: migrate ↔ backend ↔ frontend talk over this by service
+  # name (frontend, backend). Kept so nothing about internal wiring changes.
   falconup:
     driver: bridge
+  # Shared reverse-proxy network. edge-nginx reaches falconup-backend /
+  # falconup-frontend by CONTAINER name here (short names `frontend`/`backend`
+  # collide with the music stack on this network, so the .conf uses the unique
+  # container names). Create once on the VM:  docker network create edge
+  edge:
+    external: true
