@@ -1,19 +1,8 @@
 name: falconup-40
 services:
-  nginx:
-    container_name: falconup-nginx
-    image: nginx:latest
-    restart: unless-stopped
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./nginx/log:/var/log/nginx
-    depends_on:
-      - frontend
-      - backend
-    networks:
-      - falconup
+  # nginx removed — the shared edge-proxy stack (~/_proj/edge-proxy) owns :80 and
+  # reverse-proxies falconup.julia7hk.com to falconup-backend / falconup-frontend
+  # over the external `edge` network. Kept in sync with compose.yaml.
 
   backend:
     container_name: falconup-backend
@@ -26,6 +15,7 @@ services:
       - ../.env
     networks:
       - falconup
+      - edge
 
   frontend:
     container_name: falconup-frontend
@@ -37,13 +27,23 @@ services:
         - NEXT_PUBLIC_FASTAPI_SERVER=${NEXT_PUBLIC_FASTAPI_SERVER}
         - NEXT_PUBLIC_BETTER_AUTH_URL=${NEXT_PUBLIC_BETTER_AUTH_URL}
     restart: unless-stopped
+    # Local dev only: nginx used to be the sole published port. On oc40 the
+    # edge-proxy stack reaches this container over `edge` and this mapping is
+    # redundant but harmless; without it a local `up` is unreachable.
+    ports:
+      - "${WEB_PORT}:4040"
     env_file:
       - ../.env
     depends_on:
       - backend
     networks:
       - falconup
+      - edge
 
 networks:
   falconup:
     driver: bridge
+  # Shared reverse-proxy network (edge-proxy stack). Must already exist, on the
+  # VM and locally alike, or `up` fails:  docker network create edge
+  edge:
+    external: true
