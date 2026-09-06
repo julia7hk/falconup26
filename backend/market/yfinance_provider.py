@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import yfinance as yf
 
@@ -56,8 +56,12 @@ class YFinanceProvider:
         end: date,
     ) -> list[OHLCV]:
         ticker = yf.Ticker(symbol)
-        # yfinance end date is exclusive, so add one day
-        df = ticker.history(start=start.isoformat(), end=end.isoformat(), auto_adjust=True)
+        # yfinance end date is exclusive, so add one day to make `end` inclusive
+        df = ticker.history(
+            start=start.isoformat(),
+            end=(end + timedelta(days=1)).isoformat(),
+            auto_adjust=True,
+        )
         if df.empty:
             return []
         bars: list[OHLCV] = []
