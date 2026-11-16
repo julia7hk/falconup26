@@ -7,6 +7,7 @@ import type { PriceBar, IndicatorData } from "@/types";
 import { PriceChart } from "@/components/PriceChart";
 import { IndicatorCard } from "@/components/IndicatorCard";
 import { CompositeCard } from "@/components/CompositeCard";
+import DataVintage from "@/components/DataVintage";
 
 export default function SymbolPage() {
   const { ticker } = useParams<{ ticker: string }>();
@@ -215,9 +216,7 @@ export default function SymbolPage() {
                 )}
               </div>
 
-              <p className="text-xs text-zinc-400">
-                Computed {indicators.computed_at} · {indicators.data_points} trading days of data
-              </p>
+              <DataVintage indicators={indicators} />
             </div>
           )}
         </section>

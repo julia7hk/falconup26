@@ -15,6 +15,7 @@ import { PriceChart } from "@/components/PriceChart";
 import { IndicatorCard } from "@/components/IndicatorCard";
 import { CompositeCard } from "@/components/CompositeCard";
 import { Navbar } from "@/components/Navbar";
+import DataVintage from "@/components/DataVintage";
 
 export default function Home() {
   const { data: session } = authClient.useSession();
@@ -424,9 +425,7 @@ export default function Home() {
                   )}
                 </div>
 
-                <p className="text-xs text-zinc-400">
-                  Computed {indicators.computed_at} · {indicators.data_points} trading days of data
-                </p>
+                <DataVintage indicators={indicators} />
               </div>
             )}
           </section>
