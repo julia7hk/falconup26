@@ -52,6 +52,11 @@ export type SearchResult = {
 export type IndicatorData = {
   ticker: string;
   computed_at: string;
+  /** Date of the last price bar the math actually used. */
+  data_through: string;
+  data_age_days: number;
+  /** True when the price history has fallen behind the market. */
+  stale: boolean;
   data_points: number;
   indicators: {
     rsi?: { value: number; signal: string };
