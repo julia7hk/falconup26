@@ -44,6 +44,11 @@ MIN_POINTS = {
     "sma_crossover": 200,
 }
 
+# Trading days don't fall on weekends or market holidays, so a fresh series
+# can legitimately be a few days old (a Monday read of Friday's close, plus a
+# holiday). Past this, the data is behind for a reason worth surfacing.
+STALE_AFTER_DAYS = 5
+
 
 @router.get("/{ticker}/indicators")
 async def get_indicators(
@@ -133,9 +138,18 @@ async def get_indicators(
 
     composite = composite_score(indicators)
 
+    # `computed_at` says when the math ran, not how old its inputs are — on its
+    # own it makes a stale series look like a fresh read. Report the vintage of
+    # the last bar actually used so a lagging backfill is visible to the caller.
+    data_through = dates[-1]
+    data_age_days = (date.today() - date.fromisoformat(data_through)).days
+
     response = {
         "ticker": ticker,
         "computed_at": date.today().isoformat(),
+        "data_through": data_through,
+        "data_age_days": data_age_days,
+        "stale": data_age_days > STALE_AFTER_DAYS,
         "data_points": data_points,
         "risk_free_rate_source": risk_free_rate_source,
         "indicators": {k: asdict(v) for k, v in indicators.items()},
