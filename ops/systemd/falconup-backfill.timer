@@ -1,0 +1,15 @@
+[Unit]
+Description=Nightly FalconUp market data refresh
+Documentation=https://github.com/julia7hk/falconup26
+
+[Timer]
+# 23:30 UTC daily — comfortably after the US close (21:00 UTC EST /
+# 20:00 UTC EDT) so the session's bars have settled at the vendor.
+OnCalendar=*-*-* 23:30:00
+RandomizedDelaySec=10min
+# Catch up after downtime instead of silently skipping the window. This is
+# the property that would have prevented the Aug-Nov 2026 data gap.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
