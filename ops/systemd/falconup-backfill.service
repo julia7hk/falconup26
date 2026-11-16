@@ -1,0 +1,18 @@
+[Unit]
+Description=FalconUp incremental market data refresh
+Documentation=https://github.com/julia7hk/falconup26
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/_proj/falconup26
+ExecStart=/home/ubuntu/_proj/falconup26/ops/scripts/refresh-data.sh
+# yfinance + FRED over the network; don't let a hung vendor call wedge the timer.
+TimeoutStartSec=30min
+Nice=10
+
+[Install]
+WantedBy=multi-user.target
