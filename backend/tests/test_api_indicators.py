@@ -139,3 +139,70 @@ def test_indicators_response_shape():
 
     assert "value" in indicators["sharpe"]
     assert "risk_free_rate" in indicators["sharpe"]
+
+
+# --- data vintage / staleness -------------------------------------------
+
+
+def _stale_session(days_ago: int):
+    """Mock session whose price history ends `days_ago` days before today."""
+    rows = _make_price_rows()
+    shift = timedelta(days=days_ago - 1)
+    shifted = [r._replace(date=r.date - shift) for r in rows]
+
+    session = AsyncMock()
+    call_count = 0
+
+    async def fake_execute(query, params=None):
+        nonlocal call_count
+        call_count += 1
+        result = MagicMock()
+        if call_count == 1:
+            result.fetchall.return_value = shifted
+        else:
+            result.fetchone.return_value = MacroRow(value=5.33)
+        return result
+
+    session.execute = fake_execute
+    return session
+
+
+def _use_session(session):
+    async def _override():
+        yield session
+
+    app.dependency_overrides[get_session] = _override
+
+
+def test_indicators_report_data_vintage():
+    """Fresh data reports its last bar date and is not flagged stale."""
+    resp = client.get("/api/symbols/QQQ/indicators")
+    data = resp.json()
+
+    # The default fixture's series ends yesterday.
+    assert data["data_through"] == (date.today() - timedelta(days=1)).isoformat()
+    assert data["data_age_days"] == 1
+    assert data["stale"] is False
+
+
+def test_indicators_flag_stale_data():
+    """A series that stopped updating is flagged, not silently served."""
+    _use_session(_stale_session(90))
+    resp = client.get("/api/symbols/QQQ/indicators")
+    data = resp.json()
+
+    assert data["data_age_days"] == 90
+    assert data["stale"] is True
+    # computed_at still reports when the math ran — the two must not be conflated.
+    assert data["computed_at"] == date.today().isoformat()
+    assert data["data_through"] != data["computed_at"]
+
+
+def test_indicators_weekend_gap_is_not_stale():
+    """A long weekend is normal market behaviour, not staleness."""
+    _use_session(_stale_session(4))
+    resp = client.get("/api/symbols/QQQ/indicators")
+    data = resp.json()
+
+    assert data["data_age_days"] == 4
+    assert data["stale"] is False
